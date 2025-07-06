@@ -111,7 +111,7 @@ public class GameManager : MonoBehaviour {
         GravityBall = gravityBall;
 
         if (Input.GetButtonDown("Jump")) {
-            SpawnEightBall();
+            BrickZap();
         }
     }
 
@@ -119,8 +119,10 @@ public class GameManager : MonoBehaviour {
         Debug.Log("EXPANDED");
         GameObject paddle = GameObject.Find("Paddle");
         Vector3 scale = paddle.transform.localScale;
-        scale.x *= PaddleSizeMod;
-        paddle.transform.localScale = scale;
+        if (scale.x < 18.4f) {
+            scale.x *= PaddleSizeMod;
+            paddle.transform.localScale = scale;
+        }
         //paddle.GetComponent<PaddleMove>().XBoundry -= 0.85f;
     }
 
@@ -134,7 +136,38 @@ public class GameManager : MonoBehaviour {
         paddle.transform.localScale = new Vector3(0.76f, 1.8f, 0.54922f);
     }
 
-#region Initialization
+    public void BrickZap() {
+        GameObject[] bricks = GameObject.FindGameObjectsWithTag("Brick");
+        foreach (GameObject brick in bricks) {
+            if (brick.GetComponent<ObjHealth>().health > 1) {
+                // Lightning Strike animation
+                brick.GetComponent<ObjHealth>().health = 1;
+            }
+            if (brick.GetComponent<ObjHealth>().Invincibility) {
+                brick.GetComponent<ObjHealth>().Invincibility = false;
+            }
+        }
+    }
+
+    public void Lightning() {
+        GameObject[] bricks = GameObject.FindGameObjectsWithTag("Brick");
+        if (bricks.Length == 0) return;
+        List<GameObject> availableBricks = new List<GameObject>(bricks);
+
+        int strikes = Mathf.Min(3, availableBricks.Count);
+        for (int x = 0; x < strikes; x++) {
+            int index = Random.Range(0, availableBricks.Count);
+            if (availableBricks[index].GetComponent<ObjHealth>() != null) {
+                // Lightning Strike animation
+                availableBricks[index].GetComponent<ObjHealth>().TakeDamage((int)availableBricks[index].GetComponent<ObjHealth>().health, 1);
+            }
+            availableBricks.RemoveAt(index);
+        }
+    }
+
+
+
+    #region Initialization
     private void HandleSingleton() {
         if (Instance != null && Instance != this) {
             Destroy(gameObject);
@@ -174,7 +207,7 @@ public class GameManager : MonoBehaviour {
     
     #region Ball Management
     public void SpawnBall() {
-        GameObject newBall = Instantiate(ballPrefab, Vector3.zero, Quaternion.identity);
+        GameObject newBall = Instantiate(ballPrefab, GameManager.ActiveBalls[0].transform.position, Quaternion.identity);
         newBall.GetComponent<BallMovement>().InitializeBall(new Vector3(Random.Range(-5f, 5f), 1, 0));
     }
 

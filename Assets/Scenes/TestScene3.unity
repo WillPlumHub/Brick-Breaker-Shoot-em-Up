@@ -618,37 +618,6 @@ MonoBehaviour:
   breakEffectPrefab: {fileID: 0}
   CameraShake: 0
   powerUpOdds: 10
---- !u!1 &1739041554
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1739041555}
-  m_Layer: 0
-  m_Name: GameObject
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &1739041555
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1739041554}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -7.36, y: -3.7318673, z: -0.7217002}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &1851134407
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -662,8 +631,16 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 7036643225204254626, guid: c99236d14580b9e41b742af79d4bae89, type: 3}
     - target: {fileID: 341357414363496314, guid: 9997699c696daa54db99fea46c8920b6, type: 3}
+      propertyPath: gravityBall
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 341357414363496314, guid: 9997699c696daa54db99fea46c8920b6, type: 3}
       propertyPath: sceneToLoad
       value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 341357414363496314, guid: 9997699c696daa54db99fea46c8920b6, type: 3}
+      propertyPath: targetScore
+      value: 10
       objectReference: {fileID: 0}
     - target: {fileID: 341357414363496314, guid: 9997699c696daa54db99fea46c8920b6, type: 3}
       propertyPath: paddleSizeMod
@@ -928,6 +905,10 @@ PrefabInstance:
       propertyPath: ceilingBreak
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 3630751626587320739, guid: c99236d14580b9e41b742af79d4bae89, type: 3}
+      propertyPath: gravityBallReduction
+      value: 10
+      objectReference: {fileID: 0}
     - target: {fileID: 7036643225204254626, guid: c99236d14580b9e41b742af79d4bae89, type: 3}
       propertyPath: m_Name
       value: Ball
@@ -1147,7 +1128,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8454070529422067479, guid: f1189b342ef0c7846b91314de405460e, type: 3}
       propertyPath: XBoundry
-      value: 7
+      value: 7.6
       objectReference: {fileID: 0}
     - target: {fileID: 8454070529422067479, guid: f1189b342ef0c7846b91314de405460e, type: 3}
       propertyPath: bulletCount
@@ -1178,4 +1159,3 @@ SceneRoots:
   - {fileID: 5470973697024990966}
   - {fileID: 1525544108}
   - {fileID: 1880628559}
-  - {fileID: 1739041555}

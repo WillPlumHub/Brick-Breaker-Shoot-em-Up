@@ -25,6 +25,9 @@ public class BallMovement : MonoBehaviour {
     public bool ceilingBreak = false;
     public bool isStuckToPaddle = false;
 
+    public float gravityBallReduction = 8f;
+    public float terminalFallSpeed = 12f;
+
     private void Awake() {
         paddle = GameObject.Find("Paddle");
 
@@ -62,14 +65,24 @@ public class BallMovement : MonoBehaviour {
             isStuckToPaddle = false;
             Debug.Log("YEPPERS");
         }
+        if (isStuckToPaddle) {
+            GameManager.GravityBall = false;
+        }
 
         if (currentSpeed <= 0.1f && moveDir.y > 0) {
             moveDir.y = -1f;
-            currentSpeed = 3f;
+            
+            if (!GameManager.GravityBall) {
+                currentSpeed = 3f;
+            }
         }
 
         if (currentSpeed >= 5 && currentSpeed <= 8) {
             accelerationDrag = 1.8f;
+        }
+
+        if (GameManager.GravityBall && !GameManager.IsGameStarted) {
+            GravityBall();
         }
 
         /*if (Input.GetButtonDown("Jump")) {
@@ -78,6 +91,7 @@ public class BallMovement : MonoBehaviour {
     }
 
     public void FastBall() {
+        GameManager.GravityBall = false;
         currentSpeed = 14f;
         accelerationDrag = 0.2f;
     }
@@ -100,6 +114,21 @@ public class BallMovement : MonoBehaviour {
         //x2 score mult
         GameManager.scoreMult = 2;
         GameManager.GravityBall = false;
+    }
+
+    public void GravityBall() {
+        if (moveDir.y > 0) {
+            currentSpeed -= gravityBallReduction * Time.deltaTime;
+            if (currentSpeed <= 0.1f) {
+                currentSpeed = 0.1f;
+                moveDir.y = -1;
+            }
+        }
+
+        else if (moveDir.y < 0) {
+            currentSpeed += gravityBallReduction * Time.deltaTime;
+            currentSpeed = Mathf.Min(currentSpeed, terminalFallSpeed);
+        }
     }
 
     private void bounceCheck() {
@@ -138,21 +167,36 @@ public class BallMovement : MonoBehaviour {
     }
 
     private void HandleSpeedAdjustment() {
-        if (currentSpeed > targetSpeed) {
-            currentSpeed -= accelerationDrag * Time.deltaTime;
-            if (currentSpeed < targetSpeed) {
-                currentSpeed = targetSpeed;
+        if (!GameManager.GravityBall)
+        {
+            if (currentSpeed > targetSpeed)
+            {
+                currentSpeed -= accelerationDrag * Time.deltaTime;
+                if (currentSpeed < targetSpeed)
+                {
+                    currentSpeed = targetSpeed;
+                }
             }
-        } else if (currentSpeed < targetSpeed) {
-            currentSpeed += accelerationDrag * Time.deltaTime;
-            if (currentSpeed > targetSpeed) {
-                currentSpeed = targetSpeed;
+            else if (currentSpeed < targetSpeed)
+            {
+                currentSpeed += accelerationDrag * Time.deltaTime;
+                if (currentSpeed > targetSpeed)
+                {
+                    currentSpeed = targetSpeed;
+                }
             }
         }
 
-        if (moveDir.y > 1 || moveDir.y < -1 || (moveDir.y < 1 && moveDir.y > -1)) {
+
+        if (moveDir.y > 0 && moveDir.y != 1) {
             moveDir.y = 1;
         }
+        if (moveDir.y < 0 && moveDir.y != -1) {
+            moveDir.y = -1;
+        }
+        /*if (moveDir.y == -1 && currentSpeed < 0) {
+            currentSpeed = 0.1f;
+        }*/
     }
 
     private void CheckPaddleCollision() {
@@ -184,7 +228,9 @@ public class BallMovement : MonoBehaviour {
         Vector2 normal = collision.GetContact(0).normal;
         float angle = Vector2.Angle(normal, Vector2.up);
 
-        HandleBlockCollision(collision.gameObject);
+        if (collision.gameObject.CompareTag("Block") || collision.gameObject.CompareTag("Brick")) {
+            HandleBlockCollision(collision.gameObject);
+        }
         
         if (!GameManager.BrickThu || collision.gameObject.CompareTag("Block")) {
             HandleBouncePhysics(angle, collision.gameObject);
@@ -194,21 +240,19 @@ public class BallMovement : MonoBehaviour {
     }
 
     private void HandleBlockCollision(GameObject collidedObject) {
-        if (collidedObject.CompareTag("Block") || collidedObject.CompareTag("Brick")) {
-            if (currentSpeed > targetSpeed) {
-                scoreMult = (int)(currentSpeed - 3);
-            } else {
-                scoreMult = 2;
-            }
+        if (currentSpeed > targetSpeed) {
+            scoreMult = (int)(currentSpeed - 3);
+        } else {
+            scoreMult = 2;
+        }
 
-            if (GameManager.FireBall) {
-                // Fireball logic
-            }
+        if (GameManager.FireBall) {
+            // Fireball logic
+        }
 
-            collidedObject.GetComponent<ObjHealth>().TakeDamage(1, scoreMult);
-            if (collidedObject.CompareTag("Brick")) {
-                GameManager.Instance.PlaySFX(GameManager.Instance.ballBounceSound);
-            }
+        collidedObject.GetComponent<ObjHealth>().TakeDamage(1, scoreMult);
+        if (collidedObject.CompareTag("Brick")) {
+            GameManager.Instance.PlaySFX(GameManager.Instance.ballBounceSound);
         }
     }
 

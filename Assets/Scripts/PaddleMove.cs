@@ -1,6 +1,8 @@
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
+using UnityEngine.UIElements;
 using static UnityEngine.Rendering.VirtualTexturing.Debugging;
 
 public class PaddleMove : MonoBehaviour {
@@ -8,7 +10,7 @@ public class PaddleMove : MonoBehaviour {
     [Header("Movement")]
     public float yPos = -4f; // Paddle's Y position
     public float disableMovement = 0f; // Time left disabled when hit
-    public float XBoundry = 7f;
+    public float XBoundry = 7.6f;
     private Vector3 mousePosition = new Vector3(0, 0, 0);
 
     [Header("Flip")]
@@ -17,7 +19,7 @@ public class PaddleMove : MonoBehaviour {
     public float maxFlipHeight = -3.5f; // Max extent paddle will move up to when flipping
     public float recoilSpeed;
     public AnimationCurve recoilCurve;
-    public float normalizedHeight;
+    private float normalizedHeight;
     GameManager gameManager;
 
     [Header("Magnet Pull")]
@@ -30,10 +32,7 @@ public class PaddleMove : MonoBehaviour {
     public int bulletCount = 3;
     public bool grabPaddle = false;
     public bool anyBallStuck = false;
-
-    [Header("Private Vars")]
-    private bool _mouseReleased = true;
-    
+        
     void Start() {
         GameManager.IsGameStarted = true;
 
@@ -50,64 +49,51 @@ public class PaddleMove : MonoBehaviour {
     
     void Update() {
         HandleInput();
-        ClickControls();
+        MagnetPull();
         MouseMovement();
         flip();
         variableUpdate();
     }
 
-    void HandleInput() {
-        // Handle mouse button state
-        bool mouseDown = Input.GetMouseButton(0);
-        bool mouseUp = Input.GetMouseButtonUp(0);
+    void HandleInput() { // Handle mouse button state
         bool mouseDownThisFrame = Input.GetMouseButtonDown(0);
 
-        if (mouseDownThisFrame && GameManager.IsGameStarted && _mouseReleased) { // Start game on first click
+        if (mouseDownThisFrame && GameManager.IsGameStarted) { // Start game on first click
             GameManager.IsGameStarted = false;
-            _mouseReleased = false;
             return;
-        }
-
-        if (!GameManager.IsGameStarted) {
-
+        } else if (!GameManager.IsGameStarted) {
             if (!lazerPaddle) {
-            // Now do the ball stuck check safely
-            foreach (var ball in GameManager.ActiveBalls) {
-                if (ball != null && ball.GetComponent<BallMovement>().isStuckToPaddle) {
-                    Debug.Log("BLOCKED FLIP: Ball is stuck!");
-                    return;
+                foreach (var ball in GameManager.ActiveBalls) { // Check if any balls are stuck
+                    if (ball != null && ball.GetComponent<BallMovement>().isStuckToPaddle) {
+                        anyBallStuck = true;
+                        Debug.Log("BLOCKED FLIP: Ball is stuck!");
+                        return;
+                    }
                 }
-            }
-            Debug.Log("ALLOWED FLIP: No balls stuck.");
 
-                if (!anyBallStuck)
-                {
-                    if (mouseDown && !flipping && _mouseReleased)
-                    {
+                Debug.Log("ALLOWED FLIP: No balls stuck.");
+                if (!anyBallStuck) {
+                    if (mouseDownThisFrame) { // Activate flip
                         gameManager.PlaySFX(gameManager.flipSound);
                         flipping = true;
-                        _mouseReleased = false;
-                    }
-                    else if (mouseUp && flipping)
-                    {
+                    } else if (Input.GetMouseButtonUp(0)) { // Deactivate flip
                         flipping = false;
-                        _mouseReleased = true;
                     }
 
-                    if (mouseUp) _mouseReleased = true; // Update release state
-
-                    if (mouseDown && transform.position.y < maxFlipHeight)
-                    {
+                    if (Input.GetMouseButton(0) && transform.position.y < maxFlipHeight) { // Recoil speed modification
                         float currentY = transform.position.y;
                         normalizedHeight = Mathf.InverseLerp(-4f, -3.8f, currentY);
                         recoilSpeed = recoilCurve.Evaluate(normalizedHeight);
-                    }
-                    else
-                    {
+                    } else {
                         recoilSpeed = 5;
                     }
+                } else {
+                    if (mouseDownThisFrame) { // Unstick ball(s)
+                        anyBallStuck = false;
+                    }
                 }
-            } else {
+
+            } else { // W/ lazer paddle, fire lazer projectile
                 if (mouseDownThisFrame) {
                     firePaddleLaser();
                 }
@@ -117,43 +103,61 @@ public class PaddleMove : MonoBehaviour {
     }
 
     void OnTriggerEnter2D(Collider2D col) {
-        if (col.gameObject.CompareTag("Lazer")) {
+        if (col.gameObject.CompareTag("Lazer")) { // Disable on hit
             disableMovement = col.gameObject.GetComponent<Lazer>().disableTime;
         }
     }
 
-    void ClickControls() {
-        if (!Input.GetMouseButtonDown(1) || GameManager.IsGameStarted || GameManager.ActiveBalls == null) return;
-        float paddleX = transform.position.x;
-        foreach (GameObject ball in GameManager.ActiveBalls) {
+    void MagnetPull() { // Magnet pull
+        if (!Input.GetMouseButtonDown(1) || GameManager.IsGameStarted || GameManager.ActiveBalls == null) return; // Don't bother conditions
+
+        foreach (GameObject ball in GameManager.ActiveBalls) { // Iterate through balls
             if (ball == null) continue;
             BallMovement ballMovement = ball.GetComponent<BallMovement>();
             if (ballMovement == null || ballMovement.isStuckToPaddle) continue;
 
-            float range = Mathf.Clamp01(1f - (Mathf.Abs(ball.transform.position.x - paddleX) / magnetOffset));
+            float range = Mathf.Clamp01(1f - (Mathf.Abs(ball.transform.position.x - transform.position.x) / magnetOffset)); // Check if given ball is within magnet range
             bool isWithinOffset = range > 0f;
             
-            if (isWithinOffset) {
+            if (isWithinOffset) { // Actually activate the magnet effect
                 if (ballMovement.moveDir.y == 1) {
                     ballMovement.currentSpeed -= decellerate;
                 } else if (ballMovement.moveDir.y == -1) {
                     ballMovement.currentSpeed += decellerate;
+                } else {
+                    ballMovement.moveDir.y = -1;
                 }
             }
         }
     }
 
+        //float clampedX = Mathf.Clamp(mousePosition.x, -XBoundry + (transform.localScale.x / 2), XBoundry - (transform.localScale.x / 2));
     void MouseMovement() {
         mousePosition = Camera.main.ScreenToWorldPoint(Input.mousePosition);
         mousePosition.z = Camera.main.transform.position.z + Camera.main.nearClipPlane;
 
-        float clampedX = Mathf.Clamp(mousePosition.x, -XBoundry + (transform.localScale.x / 2), XBoundry - (transform.localScale.x / 2));
+        float paddleWidth = transform.localScale.x;
+        //XBoundry = 0.03071f * paddleWidth * paddleWidth - 0.12456f * paddleWidth + 7.8862f;
+
+        if (transform.localScale.x < 2.31f) {
+            XBoundry = 7.6f;
+        } else if (transform.localScale.x < 4.61f) {
+            XBoundry = 7.9f;
+        } else if (transform.localScale.x < 9.21f) {
+            XBoundry = 8.5f;
+        } else if (transform.localScale.x < 18.41f) {
+            XBoundry = 9.6f;
+        }
+
+        float clampedX = Mathf.Clamp(mousePosition.x, -XBoundry + (paddleWidth / 2), XBoundry - (paddleWidth / 2));
+
         if (disableMovement > 0) {
             disableMovement -= 1 * Time.deltaTime;
-        } else if (disableMovement <= 0) {
+        } else {
             transform.position = new Vector3(clampedX, yPos, mousePosition.z);
         }
     }
+
 
     void variableUpdate() {
         magnetOffset = GameManager.MagnetOffset;
@@ -166,7 +170,6 @@ public class PaddleMove : MonoBehaviour {
     }
 
     void firePaddleLaser() {
-        
         if (bulletCount > 0) {
             Instantiate(lazerPaddleProjectile, new Vector2(transform.position.x - 1f, transform.position.y + 0.13f), Quaternion.identity);
             Instantiate(lazerPaddleProjectile, new Vector2(transform.position.x + 1f, transform.position.y + 0.13f), Quaternion.identity);

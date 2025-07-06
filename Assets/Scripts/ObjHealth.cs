@@ -9,6 +9,7 @@ public class ObjHealth : MonoBehaviour {
     public int scoreValue = 2;
     public GameObject breakEffectPrefab;
     public bool CameraShake = false;
+    public bool Invincibility = false;
     public float powerUpOdds = 10f;
     private CameraShake cameraShake;
 
@@ -31,20 +32,22 @@ public class ObjHealth : MonoBehaviour {
     }
 
     public void TakeDamage(int damage, int scoreMult) {
-        health -= damage;
+        if (!Invincibility) {
+            health -= damage;
 
-        if (CameraShake) {
-            cameraShake.start = true;
-        }
-
-        if (health <= 0 || GameManager.BrickThu) {
-            if (!CameraShake) {
-                GameManager.brickCount -= 1;
+            if (CameraShake) {
+                cameraShake.start = true;
             }
-            DestroyBlock(scoreMult);
-        } else {
-            GameManager.CurrentScore += (scoreValue * GameManager.scoreMult) / 2;
-            ScoreSpawn((scoreValue * GameManager.scoreMult) / 2);
+
+            if (health <= 0 || GameManager.BrickThu) {
+                if (!CameraShake) {
+                    GameManager.brickCount -= 1;
+                }
+                DestroyBlock(scoreMult);
+            } else {
+                GameManager.CurrentScore += (scoreValue * GameManager.scoreMult) / 2;
+                ScoreSpawn((scoreValue * GameManager.scoreMult) / 2);
+            }
         }
     }
 

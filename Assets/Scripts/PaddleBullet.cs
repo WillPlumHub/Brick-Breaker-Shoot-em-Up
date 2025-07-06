@@ -2,8 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class PaddleBullet : MonoBehaviour
-{
+public class PaddleBullet : MonoBehaviour {
 
     public float speed = 1f;
     private GameObject paddle;
@@ -25,33 +24,6 @@ public class PaddleBullet : MonoBehaviour
             ReturnBulletToPaddle();
             Destroy(gameObject);
         }
-
-        foreach (var brick in bricks) {
-            if (brick != null) {
-                bool inVerticalRange = transform.position.y < brick.transform.position.y + 0.495f && transform.position.y > brick.transform.position.y - 0.495f;
-                                
-                bool inHorizontalRange = transform.position.x > brick.transform.position.x - 0.38f && transform.position.x < brick.transform.position.x + 0.38f;
-
-                if (inVerticalRange && inHorizontalRange) {
-                    //Debug.Log($"Bullet overlaps brick: {brick.name}");
-                    
-                    ReturnBulletToPaddle();
-                    UpdateBricks();
-                    if (!GameManager.BrickThu) {
-                        Destroy(gameObject);
-                    }
-                    if (GameManager.FireBall) {
-                        // Fireball logic
-                    }
-
-                    brick.GetComponent<ObjHealth>()?.TakeDamage(1, 1);
-                    if (GameManager.Instance != null) {
-                        GameManager.Instance.PlaySFX(GameManager.Instance.ballBounceSound);
-                    }
-                    return;
-                }
-            }
-        }
     }
 
     private void UpdateBricks() {
@@ -63,6 +35,25 @@ public class PaddleBullet : MonoBehaviour
             if (paddle.GetComponent<PaddleMove>() != null) {
                 paddle.GetComponent<PaddleMove>().bulletCount++;
             }
+        }
+    }
+
+    private void OnTriggerEnter2D(Collider2D collision) {
+        if (collision.gameObject.CompareTag("Brick")) {
+            ReturnBulletToPaddle();
+            if (!GameManager.BrickThu) {
+                Destroy(gameObject);
+            }
+            if (GameManager.FireBall) {
+                // Fireball logic
+            }
+
+            //brick.GetComponent<ObjHealth>()?.TakeDamage(1, 1);
+            collision.gameObject.GetComponent<ObjHealth>()?.TakeDamage(1, 1);
+            if (GameManager.Instance != null) {
+                GameManager.Instance.PlaySFX(GameManager.Instance.ballBounceSound);
+            }
+            return;
         }
     }
 }
