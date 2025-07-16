@@ -45,8 +45,8 @@ Serialized level formats for fast prototyping.
 
 
 # Current Progress & Next Steps:
-Core gameplay loop functional and tested;
-Adding responsive feedback systems (e.g. VFX, audio, screen shake);
-Expanding brick types and interactions;
-Prototyping stage archetypes and alternate game modes;
-Investigating modular tools for in-editor level design.
+- Core gameplay loop functional and tested;
+- Adding responsive feedback systems (e.g. VFX, audio, screen shake);
+- Expanding brick types and interactions;
+- Prototyping stage archetypes and alternate game modes;
+- Investigating modular tools for in-editor level design.
