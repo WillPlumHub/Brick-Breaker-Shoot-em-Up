@@ -32,7 +32,9 @@ Level design explores the expressive potential of the base mechanics by introduc
 # Design & Programming Goals:
 
 Expand Player Agency Through Systems: Rather than relying on content volume, depth is created through dynamic decisions: players control ball angle, timing, positioning, and use risk/reward evaluations in real time.
+
 Systemic Design for Level Archetypes: Stage types are mechanically differentiated, focusing on a different design axis such as precision, endurance, and/or spatial awareness.
+
 Scalable & Maintainable Architecture: Code is written for extensibility, systems are decoupled, testable, and agnostic to rendering. Brick types, ball behaviors, and stage modifiers can be introduced with minimal refactoring.
 
 
