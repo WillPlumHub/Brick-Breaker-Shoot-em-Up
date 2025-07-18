@@ -1,4 +1,4 @@
-# Brick Shmup (Working Title)
+# Brick Breaker Shmup (Working Title)
 
 A modern reimagining of the classic brick breaker, Brick Shmup blends arcade-style paddle mechanics with the dynamic structure of a shoot-'em-up. Built from scratch in Unity, the game features a custom, grid-based architecture designed to support a wide variety of gameplay modes and systemic interactions. The project serves as a technical and design platform for exploring meaningful player decision-making through mechanical depth, flexible core systems, and experimental level formats, from classic single-screen challenge layouts to scrolling shooter hybrids and multi-screen pinball-inspired stages.
 
@@ -7,7 +7,7 @@ A modern reimagining of the classic brick breaker, Brick Shmup blends arcade-sty
 
 Custom Brick Grid Architecture: A modular grid separates brick logic from presentation. Bricks are managed via a central BrickGrid system, with rendering handled independently by BrickView components. This enables efficient simulation, clean separation of concerns, and rapid iteration on visuals or behavior.
 
-Brick State Management: Bricks transition through defined states (e.g. Normal → Cracked → Destroyed), with support for unbreakables, multi-hit bricks, chain reactions, and bricks that trigger level-specific effects. Each transition can trigger both visual and systemic responses.
+Brick State Management: Bricks have support for unbreakables, multi-hit bricks, chain reactions, and bricks that trigger level-specific effects. Each transition can trigger both visual and systemic responses.
 
 Extensible Paddle & Ball Logic:
 The paddle supports a minimalist movement base, layered with modular mechanics like:
