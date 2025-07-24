@@ -34,7 +34,7 @@ public class PaddleMove : MonoBehaviour {
     public bool anyBallStuck = false;
         
     void Start() {
-        GameManager.IsGameStarted = true;
+        GameManager.IsGameStart = true;
 
         // Initializing GameManager values in case they aren't already
         if (GameManager.DisableTimer == 0) GameManager.DisableTimer = disableMovement;
@@ -43,7 +43,7 @@ public class PaddleMove : MonoBehaviour {
     }
     
     void Awake() {
-        GameManager.IsGameStarted = true;
+        GameManager.IsGameStart = true;
         gameManager = GameObject.FindGameObjectWithTag("GameController").GetComponent<GameManager>();
     }
     
@@ -58,20 +58,18 @@ public class PaddleMove : MonoBehaviour {
     void HandleInput() { // Handle mouse button state
         bool mouseDownThisFrame = Input.GetMouseButtonDown(0);
 
-        if (mouseDownThisFrame && GameManager.IsGameStarted) { // Start game on first click
-            GameManager.IsGameStarted = false;
+        if (mouseDownThisFrame && GameManager.IsGameStart) { // Start game on first click
+            GameManager.IsGameStart = false;
             return;
-        } else if (!GameManager.IsGameStarted) {
+        } else if (!GameManager.IsGameStart) {
             if (!lazerPaddle) {
                 foreach (var ball in GameManager.ActiveBalls) { // Check if any balls are stuck
                     if (ball != null && ball.GetComponent<BallMovement>().isStuckToPaddle) {
                         anyBallStuck = true;
-                        Debug.Log("BLOCKED FLIP: Ball is stuck!");
                         return;
                     }
                 }
 
-                Debug.Log("ALLOWED FLIP: No balls stuck.");
                 if (!anyBallStuck) {
                     if (mouseDownThisFrame) { // Activate flip
                         gameManager.PlaySFX(gameManager.flipSound);
@@ -109,7 +107,7 @@ public class PaddleMove : MonoBehaviour {
     }
 
     void MagnetPull() { // Magnet pull
-        if (!Input.GetMouseButtonDown(1) || GameManager.IsGameStarted || GameManager.ActiveBalls == null) return; // Don't bother conditions
+        if (!Input.GetMouseButtonDown(1) || GameManager.IsGameStart || GameManager.ActiveBalls == null) return; // Don't bother conditions
 
         foreach (GameObject ball in GameManager.ActiveBalls) { // Iterate through balls
             if (ball == null) continue;
@@ -139,7 +137,12 @@ public class PaddleMove : MonoBehaviour {
         float paddleWidth = transform.localScale.x;
         //XBoundry = 0.03071f * paddleWidth * paddleWidth - 0.12456f * paddleWidth + 7.8862f;
 
-        if (transform.localScale.x < 2.31f) {
+        if (transform.localScale.x < 0.77f) {
+            XBoundry = 7.38f;
+            GameManager.scoreMult = 2;
+        } else if (transform.localScale.x < 1.16f) {
+            XBoundry = 7.45f;
+        } else if (transform.localScale.x < 2.31f) {
             XBoundry = 7.6f;
         } else if (transform.localScale.x < 4.61f) {
             XBoundry = 7.9f;
@@ -171,8 +174,8 @@ public class PaddleMove : MonoBehaviour {
 
     void firePaddleLaser() {
         if (bulletCount > 0) {
-            Instantiate(lazerPaddleProjectile, new Vector2(transform.position.x - 1f, transform.position.y + 0.13f), Quaternion.identity);
-            Instantiate(lazerPaddleProjectile, new Vector2(transform.position.x + 1f, transform.position.y + 0.13f), Quaternion.identity);
+            Instantiate(lazerPaddleProjectile, new Vector2(transform.position.x - transform.localScale.x / 3, transform.position.y + 0.13f), Quaternion.identity);
+            Instantiate(lazerPaddleProjectile, new Vector2(transform.position.x + transform.localScale.x / 3, transform.position.y + 0.13f), Quaternion.identity);
             bulletCount-=2;
         }
     }

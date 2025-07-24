@@ -53,8 +53,11 @@ public class ObjHealth : MonoBehaviour {
 
     private void DestroyBlock(int scoreMult) {
 
-        if (Random.Range(0f, 100f) < powerUpOdds && !CameraShake) {
+        float rand = Random.Range(0f, 100f);
+        Debug.Log("Chance: " + rand);
+        if (rand < powerUpOdds && !CameraShake) {
             Debug.Log("Got a power up");
+            GameManager.Instance.PowerUpSpawn(rand, transform.position);
             //Instantiate power up
         }
 

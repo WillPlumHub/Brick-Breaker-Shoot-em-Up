@@ -28,6 +28,10 @@ public class BallMovement : MonoBehaviour {
     public float gravityBallReduction = 8f;
     public float terminalFallSpeed = 12f;
 
+    private float savedSpeed = 5f;
+    private float paddleOffsetX = 0f;
+
+
     private void Awake() {
         paddle = GameObject.Find("Paddle");
 
@@ -49,7 +53,25 @@ public class BallMovement : MonoBehaviour {
     private void Update() {
         bool grabPaddle = paddle.GetComponent<PaddleMove>().grabPaddle;
 
-        if (GameManager.IsGameStarted) {
+        if (isStuckToPaddle && paddle.GetComponent<PaddleMove>().anyBallStuck) {
+            if (currentSpeed > 0f) {
+                savedSpeed = currentSpeed;
+            }
+
+            currentSpeed = 0f;
+            moveDir.y = 1f;
+            StickToPaddle();
+            GameManager.GravityBall = false;
+
+            if (Input.GetMouseButtonDown(0)) {
+                isStuckToPaddle = false;
+                currentSpeed = savedSpeed;
+            }
+
+            return;
+        }
+
+        if (GameManager.IsGameStart) {
             StickToPaddle();
         } else {
             Movement();
@@ -60,18 +82,8 @@ public class BallMovement : MonoBehaviour {
         CheckDeathPlane();
         bounceCheck();
 
-
-        if (isStuckToPaddle && Input.GetMouseButtonDown(0)) {
-            isStuckToPaddle = false;
-            Debug.Log("YEPPERS");
-        }
-        if (isStuckToPaddle) {
-            GameManager.GravityBall = false;
-        }
-
         if (currentSpeed <= 0.1f && moveDir.y > 0) {
             moveDir.y = -1f;
-            
             if (!GameManager.GravityBall) {
                 currentSpeed = 3f;
             }
@@ -81,7 +93,7 @@ public class BallMovement : MonoBehaviour {
             accelerationDrag = 1.8f;
         }
 
-        if (GameManager.GravityBall && !GameManager.IsGameStarted) {
+        if (GameManager.GravityBall && !GameManager.IsGameStart) {
             GravityBall();
         }
 
@@ -123,9 +135,7 @@ public class BallMovement : MonoBehaviour {
                 currentSpeed = 0.1f;
                 moveDir.y = -1;
             }
-        }
-
-        else if (moveDir.y < 0) {
+        } else if (moveDir.y < 0) {
             currentSpeed += gravityBallReduction * Time.deltaTime;
             currentSpeed = Mathf.Min(currentSpeed, terminalFallSpeed);
         }
@@ -155,9 +165,8 @@ public class BallMovement : MonoBehaviour {
     }
 
     private void StickToPaddle() {
-        //currentSpeed = 0;
-        
-        transform.position = new Vector3(paddle.transform.position.x, paddle.transform.position.y + offset, 0);
+        moveDir.y = 1;
+        transform.position = new Vector3(paddle.transform.position.x + paddleOffsetX, paddle.transform.position.y + offset, 0);
     }
 
     private void Movement() {
@@ -167,21 +176,15 @@ public class BallMovement : MonoBehaviour {
     }
 
     private void HandleSpeedAdjustment() {
-        if (!GameManager.GravityBall)
-        {
-            if (currentSpeed > targetSpeed)
-            {
+        if (!GameManager.GravityBall) {
+            if (currentSpeed > targetSpeed) {
                 currentSpeed -= accelerationDrag * Time.deltaTime;
-                if (currentSpeed < targetSpeed)
-                {
+                if (currentSpeed < targetSpeed) {
                     currentSpeed = targetSpeed;
                 }
-            }
-            else if (currentSpeed < targetSpeed)
-            {
+            } else if (currentSpeed < targetSpeed) {
                 currentSpeed += accelerationDrag * Time.deltaTime;
-                if (currentSpeed > targetSpeed)
-                {
+                if (currentSpeed > targetSpeed) {
                     currentSpeed = targetSpeed;
                 }
             }
@@ -204,10 +207,14 @@ public class BallMovement : MonoBehaviour {
         bool inHorizontalRange = transform.position.x > paddle.transform.position.x - paddle.transform.localScale.x / 2.2f && transform.position.x < paddle.transform.position.x + paddle.transform.localScale.x / 2.2f;
 
         if (inVerticalRange && inHorizontalRange && moveDir.y == -1) {
-            if (paddle.GetComponent<PaddleMove>().grabPaddle) {
-                isStuckToPaddle = true;
+
+            if (transform.position.x > paddle.transform.position.x - paddle.transform.localScale.x / 2.9f && transform.position.x < paddle.transform.position.x + paddle.transform.localScale.x / 2.9f) {
+                if (paddle.GetComponent<PaddleMove>().grabPaddle && paddle.transform.position.y <= -4f) {
+                    isStuckToPaddle = true;
+                }
             }
-            
+
+            paddleOffsetX = transform.position.x - paddle.transform.position.x;
             PaddleBounce();
         }
     }
@@ -284,7 +291,7 @@ public class BallMovement : MonoBehaviour {
             accelerationDrag = 1.8f;
         }
 
-        if (currentSpeed > 14f) {
+        if (currentSpeed > 14f && paddle.GetComponent<PaddleMove>().flipping && paddle.GetComponent<PaddleMove>().recoilSpeed >= 14f) {
             GameManager.Instance.PlaySFX(GameManager.Instance.perfectFlipSound);
             Debug.Log($"Speed: {currentSpeed} PERFECT!!!");
         } else {

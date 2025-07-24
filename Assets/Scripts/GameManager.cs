@@ -13,7 +13,7 @@ public class GameManager : MonoBehaviour {
     [Header("Game state")]
     public int score;
     public TMP_Text scoreText;
-    public static bool IsGameStarted;
+    public static bool IsGameStart;
     public static int CurrentScore;
     public static float StageSpeed;
     public int targetScore = CurrentScore + 50;
@@ -50,12 +50,12 @@ public class GameManager : MonoBehaviour {
     public bool fireBall = false;
     public bool superShrink = false;
     public bool gravityBall = false;
-    public int paddleSizeMod = 0;
-    public static int PaddleSizeMod = 1;
+    //public int paddleSizeMod = 0;
+    public int PaddleSizeMod = 1;
     public static bool BrickThu = false;
     public static bool FireBall = false;
-    public static bool SuperShrink = false;
     public static bool GravityBall = false;
+    public List<PowerUpData> powerUps; // Populate in Inspector
 
     [Header("Audio")]
     [SerializeField] private AudioSource musicSource;
@@ -89,14 +89,14 @@ public class GameManager : MonoBehaviour {
         HandleScore();
         CheckGameState();
 
-        if (brickCount <= 0 && !hasLoadedNextLevel && !IsGameStarted) {
+        if (brickCount <= 0 && !hasLoadedNextLevel && !IsGameStart) {
             LoadNextLevel();
         }
 
         
-        if (scoreMult != 1 && ActiveBalls.Count > 0 && !IsGameStarted) {
+        if (scoreMult != 1 && ActiveBalls.Count > 0 && !IsGameStart) {
             timer -= (1 * Time.deltaTime);
-            Debug.Log("x2 timer: " + timer);
+            //Debug.Log("x2 timer: " + timer);
         }
         
         if (timer <= 0) {
@@ -106,32 +106,37 @@ public class GameManager : MonoBehaviour {
 
         BrickThu = brickThu;
         FireBall = fireBall;
-        SuperShrink = superShrink;
-        PaddleSizeMod = paddleSizeMod;
+        //PaddleSizeMod = paddleSizeMod;
         GravityBall = gravityBall;
 
-        if (Input.GetButtonDown("Jump")) {
-            BrickZap();
+        /*if (Input.GetButtonDown("Jump")) {
+            expandPaddle();
         }
+        if (Input.GetButtonDown("Fire3")) {
+            shrinkPaddle();
+        }*/
     }
 
     public void expandPaddle() {
-        Debug.Log("EXPANDED");
-        GameObject paddle = GameObject.Find("Paddle");
+        GameObject paddle = GameObject.Find("Paddle");        
         Vector3 scale = paddle.transform.localScale;
         if (scale.x < 18.4f) {
             scale.x *= PaddleSizeMod;
             paddle.transform.localScale = scale;
         }
-        //paddle.GetComponent<PaddleMove>().XBoundry -= 0.85f;
     }
 
     public void shrinkPaddle() {
         GameObject paddle = GameObject.Find("Paddle");
+        Vector3 scale = paddle.transform.localScale;
+        if (scale.x > 0.76f) {
+            scale.x /= PaddleSizeMod;
+            paddle.transform.localScale = scale;
+        }
+
     }
 
     public void superShrinkPaddle() {
-        scoreMult = 2;
         GameObject paddle = GameObject.Find("Paddle"); 
         paddle.transform.localScale = new Vector3(0.76f, 1.8f, 0.54922f);
     }
@@ -163,6 +168,21 @@ public class GameManager : MonoBehaviour {
             }
             availableBricks.RemoveAt(index);
         }
+    }
+
+    public void PowerUpSpawn(float odds, Vector3 spawnPos) {
+        float cumulative = 0f;
+        foreach (PowerUpData powerUp in powerUps) {
+
+            cumulative += powerUp.dropRate;
+
+            if (odds < cumulative) {
+                Instantiate(powerUp.prefab, spawnPos, Quaternion.identity);
+                Debug.Log($"Spawned PowerUp: {powerUp.itemName}");
+                return;
+            }
+        }
+        Debug.Log("No Power-up Spawned.");
     }
 
 
@@ -207,24 +227,57 @@ public class GameManager : MonoBehaviour {
     
     #region Ball Management
     public void SpawnBall() {
-        GameObject newBall = Instantiate(ballPrefab, GameManager.ActiveBalls[0].transform.position, Quaternion.identity);
-        newBall.GetComponent<BallMovement>().InitializeBall(new Vector3(Random.Range(-5f, 5f), 1, 0));
-    }
 
+        bool grabbed = false;
+        foreach (var ball in GameManager.ActiveBalls) {
+            if (ball != null) {
+                var ballMovement = ball.GetComponent<BallMovement>();
+                if (ballMovement != null && ballMovement.isStuckToPaddle) {
+                    grabbed = true;
+                    ballMovement.isStuckToPaddle = false;
+                }
+            }
+        }
+
+        float direction = grabbed ? Random.Range(-1f, 1f) : 1f;
+        GameObject newBall = Instantiate(ballPrefab, new Vector2(GameManager.ActiveBalls[0].transform.position.x + 0.5f, GameManager.ActiveBalls[0].transform.position.y), Quaternion.identity);
+        newBall.GetComponent<BallMovement>().isStuckToPaddle = false;
+        newBall.GetComponent<BallMovement>().InitializeBall(new Vector2(direction, 1));
+    }
+    
     public void SpawnEightBall() {
+        if (ActiveBalls == null || ActiveBalls.Count == 0 || ActiveBalls[0] == null) {
+            Debug.LogWarning("No active balls available to spawn from.");
+            return;
+        }
+
         Vector2 centerPos = ActiveBalls[0].transform.position;
+        bool grabbed = false;
+
+        // Unstick any balls that are stuck to the paddle
+        foreach (var ball in GameManager.ActiveBalls) {
+            if (ball != null) {
+                var ballMovement = ball.GetComponent<BallMovement>();
+                if (ballMovement != null && ballMovement.isStuckToPaddle) {
+                    grabbed = true;
+                    ballMovement.isStuckToPaddle = false;
+                }
+            }
+        }
 
         for (int i = 0; i < 8; i++) {
             float angleDeg = i * 45f; // 360° / 8 = 45°
             float angleRad = angleDeg * Mathf.Deg2Rad;
 
-            Vector2 offset = new Vector2(Mathf.Cos(angleRad), Mathf.Sin(angleRad)) * 1;
+            Vector2 offset = new Vector2(Mathf.Cos(angleRad), Mathf.Sin(angleRad));
             Vector2 spawnPos = centerPos + offset;
-            Vector2 direction = offset.normalized;
+
+            Vector2 direction = grabbed ? new Vector2(Random.Range(-1f, 1f), 1f).normalized : offset.normalized;
 
             GameObject newBall;
 
-            if (i == 0) { // Use the original ball
+            if (i == 0) {
+                // Use the original ball
                 newBall = ActiveBalls[0];
                 newBall.transform.position = spawnPos;
             } else {
@@ -232,11 +285,15 @@ public class GameManager : MonoBehaviour {
                 newBall = Instantiate(ballPrefab, spawnPos, Quaternion.identity);
             }
 
-            newBall.GetComponent<BallMovement>().moveDir = direction;
-            newBall.GetComponent<BallMovement>().currentSpeed = 5;
-            newBall.GetComponent<BallMovement>().ceilingBreak = ActiveBalls[0].GetComponent<BallMovement>().ceilingBreak;
+            var ballMovement = newBall.GetComponent<BallMovement>();
+            if (ballMovement != null) {
+                ballMovement.moveDir = direction;
+                ballMovement.currentSpeed = 5f;
+                ballMovement.ceilingBreak = ActiveBalls[0].GetComponent<BallMovement>().ceilingBreak;
+            }
         }
     }
+
 
     public static void RegisterBall(GameObject ball) {
         ActiveBalls ??= new List<GameObject>();
@@ -256,30 +313,33 @@ public class GameManager : MonoBehaviour {
 
     #region Game Logic
     public void CountBricks() {
-        if (brickContainer == null)
-            brickContainer = GameObject.Find("BlockList");
-
-        // Fallback: Find bricks by tag if container is missing
         if (brickContainer == null) {
+            brickContainer = GameObject.Find("BlockList");
+        }
+
+        brickCount = 0;
+
+        if (brickContainer == null) { // Fallback in case no container is found
             GameObject[] bricks = GameObject.FindGameObjectsWithTag("Brick");
-            brickCount = bricks.Length;
-            initialBrickCount = brickCount;  // Set initial count
-            //Debug.Log($"Counted {brickCount} bricks by tag (no container found).");
+            foreach (GameObject brick in bricks) {
+                if (brick.activeInHierarchy && !brick.GetComponent<ObjHealth>().Invincibility) {
+                    brickCount++;
+                }
+            }
+            
+            initialBrickCount = (initialBrickCount ==0) ? brickCount : initialBrickCount;  // Set initial count
             return;
         }
 
-        // Count active bricks in container
-        brickCount = 0;
-        foreach (Transform child in brickContainer.transform)
-            if (child.gameObject.activeInHierarchy)
+        foreach (Transform child in brickContainer.transform) { // Count active bricks in container
+            if (child.gameObject.activeInHierarchy && !child.GetComponent<ObjHealth>().Invincibility) {
                 brickCount++;
-
-        // Only set initial count if this is the first count
-        if (initialBrickCount == 0) {
-            initialBrickCount = brickCount;
+            }
         }
 
-        //Debug.Log($"Initial bricks: {initialBrickCount} | Current: {brickCount}");
+        if (initialBrickCount == 0) { // Only set initial count if this is the first count
+            initialBrickCount = brickCount;
+        }
     }
 
     private void UpdateGameState() {
@@ -293,7 +353,7 @@ public class GameManager : MonoBehaviour {
     }
 
     private void HandleScore() {
-        if (CurrentScore > 0 && CurrentScore >= targetScore && !CanSpawnBall && brickCount > 0 && brickCount < initialBrickCount && !IsGameStarted) { // Ball Spawn conditions
+        if (CurrentScore > 0 && CurrentScore >= targetScore && !CanSpawnBall && brickCount > 0 && brickCount < initialBrickCount && !IsGameStart) { // Ball Spawn conditions
             SpawnBall();
             CanSpawnBall = true;
             targetScore += 50;
@@ -301,7 +361,7 @@ public class GameManager : MonoBehaviour {
     }
 
     private void CheckGameState() {
-        if (ActiveBalls.Count <= 0 && !IsGameStarted) {
+        if (ActiveBalls.Count <= 0 && !IsGameStart) {
             GameOver();
         }
     }
@@ -357,6 +417,13 @@ public class GameManager : MonoBehaviour {
     #endregion
 
 
+    #region Powerups
+
+    public void powerUpSpawn() {
+
+    }
+
+    #endregion
 
     #region Debug
     private void UpdateDebugValues() {
