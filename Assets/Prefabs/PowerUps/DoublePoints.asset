@@ -1,0 +1,18 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4cd86775ed2867442803fe6ccb2b7713, type: 3}
+  m_Name: DoublePoints
+  m_EditorClassIdentifier: 
+  itemName: Double Points
+  overlaySprite: {fileID: 0}
+  prefab: {fileID: 2589749747280809442, guid: eb3954d0628f6ca4aabc124dc7017a82, type: 3}
+  dropRate: 2

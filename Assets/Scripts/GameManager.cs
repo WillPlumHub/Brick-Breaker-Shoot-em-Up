@@ -117,6 +117,9 @@ public class GameManager : MonoBehaviour {
         }*/
     }
 
+
+
+    #region PowerUps
     public void expandPaddle() {
         GameObject paddle = GameObject.Find("Paddle");        
         Vector3 scale = paddle.transform.localScale;
@@ -176,7 +179,7 @@ public class GameManager : MonoBehaviour {
 
             cumulative += powerUp.dropRate;
 
-            if (odds < cumulative) {
+            if (odds <= cumulative) {
                 Instantiate(powerUp.prefab, spawnPos, Quaternion.identity);
                 Debug.Log($"Spawned PowerUp: {powerUp.itemName}");
                 return;
@@ -184,6 +187,7 @@ public class GameManager : MonoBehaviour {
         }
         Debug.Log("No Power-up Spawned.");
     }
+    #endregion
 
 
 
@@ -417,13 +421,6 @@ public class GameManager : MonoBehaviour {
     #endregion
 
 
-    #region Powerups
-
-    public void powerUpSpawn() {
-
-    }
-
-    #endregion
 
     #region Debug
     private void UpdateDebugValues() {
