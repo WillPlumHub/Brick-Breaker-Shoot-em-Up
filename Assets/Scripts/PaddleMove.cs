@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -7,7 +7,16 @@ using static UnityEngine.Rendering.VirtualTexturing.Debugging;
 
 public class PaddleMove : MonoBehaviour {
 
+    public enum ControlType { Mouse, Keyboard, Gamepad }
+    [Header("Control Settings")]
+    private ControlType controlType = ControlType.Mouse;
+    private float lastInputCheckTime = 0f;
+    private float inputCheckCooldown = 0.1f;
+    private float moveInput = 0f;
+
     [Header("Movement")]
+    public float mod = 1;
+    public float modDefault = 1;
     public float yPos = -4f; // Paddle's Y position
     public float disableMovement = 0f; // Time left disabled when hit
     public float XBoundry = 7.6f;
@@ -49,36 +58,96 @@ public class PaddleMove : MonoBehaviour {
     
     void Update() {
         HandleInput();
-        MagnetPull();
-        MouseMovement();
+        PaddleMovement();
         flip();
         variableUpdate();
+
+        for (int i = 0; i <= 19; i++)
+        {
+            if (Input.GetKeyDown((KeyCode)(330 + i)))
+            {
+                Debug.Log("Joystick Button Pressed: " + i);
+            }
+        }
     }
 
-    void HandleInput() { // Handle mouse button state
-        bool mouseDownThisFrame = Input.GetMouseButtonDown(0);
+    void DetectControlType() {
+        if (Time.time - lastInputCheckTime < inputCheckCooldown) return;
 
-        if (mouseDownThisFrame && GameManager.IsGameStart) { // Start game on first click
+        if (Input.GetMouseButtonDown(0) || Input.GetAxis("Mouse X") != 0 || Input.GetAxis("Mouse Y") != 0) {
+            controlType = ControlType.Mouse;
+        } else if (Input.GetAxis("Horizontal") != 0 || Input.GetAxis("Vertical") != 0 || Input.GetButton("Jump")) {
+            if (Input.GetJoystickNames().Length > 0) {
+                controlType = ControlType.Gamepad;
+            } else {
+                controlType = ControlType.Keyboard;
+            }
+        }
+        lastInputCheckTime = Time.time;
+    }
+
+    void HandleInput() {
+        DetectControlType();
+
+        // --- Mouse Flip ---
+        bool flipDown = Input.GetMouseButtonDown(0);
+        bool flipUp = Input.GetMouseButtonUp(0);
+        bool flipHeld = Input.GetMouseButton(0);
+        // --- Keyboard Flip ---
+        flipDown |= Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow);
+        flipUp |= Input.GetKeyUp(KeyCode.Space) || Input.GetKeyUp(KeyCode.W) || Input.GetKeyUp(KeyCode.UpArrow);
+        flipHeld |= Input.GetKey(KeyCode.Space) || Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow);
+        // --- Gamepad Flip (Cross, Circle, L2) ---
+        flipDown |= Input.GetKeyDown(KeyCode.JoystickButton2) || Input.GetKeyDown(KeyCode.JoystickButton1) || Input.GetKeyDown(KeyCode.JoystickButton6);
+        flipUp |= Input.GetKeyUp(KeyCode.JoystickButton2) || Input.GetKeyUp(KeyCode.JoystickButton1) || Input.GetKeyUp(KeyCode.JoystickButton6);
+        flipHeld |= Input.GetKey(KeyCode.JoystickButton2) || Input.GetKey(KeyCode.JoystickButton1) || Input.GetKey(KeyCode.JoystickButton6);
+
+        // --- Mouse Magnet ---
+        bool magnetDown = Input.GetMouseButtonDown(1);
+        // --- Keyboard Magnet ---
+        magnetDown |= Input.GetKeyDown(KeyCode.LeftAlt) || Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.DownArrow);
+        // --- Gamepad Magnet (Square, Triangle, R2) ---
+        magnetDown |= Input.GetKeyDown(KeyCode.JoystickButton0) || Input.GetKeyDown(KeyCode.JoystickButton3) || Input.GetKeyDown(KeyCode.JoystickButton7);
+
+        movementMod();
+
+        /*JoystickButton0 = △
+          JoystickButton1 = ⭘
+          JoystickButton2 = ✕
+          JoystickButton3 = ⬜
+          JoystickButton4 = L1
+          JoystickButton5 = R1
+          JoystickButton6 = L2
+          JoystickButton7 = R2
+          JoystickButton8 = Select
+          JoystickButton9 = Start
+          JoystickButton10 = L3
+          JoystickButton11 = R3
+        */
+
+
+        if (flipDown && GameManager.IsGameStart) { // Start game on first click
             GameManager.IsGameStart = false;
             return;
         } else if (!GameManager.IsGameStart) {
             if (!lazerPaddle) {
+                //anyBallStuck = false;
+
                 foreach (var ball in GameManager.ActiveBalls) { // Check if any balls are stuck
                     if (ball != null && ball.GetComponent<BallMovement>().isStuckToPaddle) {
                         anyBallStuck = true;
                         return;
                     }
                 }
-
                 if (!anyBallStuck) {
-                    if (mouseDownThisFrame) { // Activate flip
+                    if (flipDown) {
                         gameManager.PlaySFX(gameManager.flipSound);
                         flipping = true;
-                    } else if (Input.GetMouseButtonUp(0)) { // Deactivate flip
+                    } else if (flipUp) {
                         flipping = false;
                     }
 
-                    if (Input.GetMouseButton(0) && transform.position.y < maxFlipHeight) { // Recoil speed modification
+                    if (flipHeld && transform.position.y < maxFlipHeight) {
                         float currentY = transform.position.y;
                         normalizedHeight = Mathf.InverseLerp(-4f, -3.8f, currentY);
                         recoilSpeed = recoilCurve.Evaluate(normalizedHeight);
@@ -86,17 +155,18 @@ public class PaddleMove : MonoBehaviour {
                         recoilSpeed = 5;
                     }
                 } else {
-                    if (mouseDownThisFrame) { // Unstick ball(s)
+                    if (flipDown) {
                         anyBallStuck = false;
                     }
                 }
-
-            } else { // W/ lazer paddle, fire lazer projectile
-                if (mouseDownThisFrame) {
+            } else {
+                if (flipDown) { // W/ lazer paddle, fire lazer projectile
                     firePaddleLaser();
                 }
             }
-
+            if (magnetDown) {
+                MagnetPull();
+            }
         }
     }
 
@@ -106,8 +176,29 @@ public class PaddleMove : MonoBehaviour {
         }
     }
 
+    public void movementMod() {
+        bool increasePressed = Input.GetKey(KeyCode.JoystickButton4) || Input.GetKey(KeyCode.LeftShift);
+        bool decreasePressed = Input.GetKey(KeyCode.JoystickButton5) || Input.GetKey(KeyCode.LeftControl);
+
+        if (increasePressed) {
+            if (modDefault > 1f) { // Wrap 1.8 → 0
+                mod = (modDefault >= 1.8f) ? 1f : mod + 1.8f;
+            } else {
+                mod = Mathf.Min(mod + 1.8f, 1.8f);
+            }
+        } else if (decreasePressed) {
+            if (modDefault == 0.3f) { // Wrap 0.3 → 2
+                mod = (modDefault <= 0.3f) ? 1f : mod - 1.7f;
+            } else {
+                mod = Mathf.Max(mod - 1.7f, 0.3f);
+            }
+        } else { // Neither button pressed — reset to default
+            mod = modDefault;
+        }
+    }
+
     void MagnetPull() { // Magnet pull
-        if (!Input.GetMouseButtonDown(1) || GameManager.IsGameStart || GameManager.ActiveBalls == null) return; // Don't bother conditions
+        if (GameManager.IsGameStart || GameManager.ActiveBalls == null) return; // Don't bother conditions
 
         foreach (GameObject ball in GameManager.ActiveBalls) { // Iterate through balls
             if (ball == null) continue;
@@ -129,15 +220,11 @@ public class PaddleMove : MonoBehaviour {
         }
     }
 
-        //float clampedX = Mathf.Clamp(mousePosition.x, -XBoundry + (transform.localScale.x / 2), XBoundry - (transform.localScale.x / 2));
-    void MouseMovement() {
-        mousePosition = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-        mousePosition.z = Camera.main.transform.position.z + Camera.main.nearClipPlane;
-
+    void PaddleMovement() {
+        float targetX = transform.position.x;
         float paddleWidth = transform.localScale.x;
-        //XBoundry = 0.03071f * paddleWidth * paddleWidth - 0.12456f * paddleWidth + 7.8862f;
-
-        if (transform.localScale.x < 0.77f) {
+                
+        if (transform.localScale.x < 0.77f) { // Update bounds based on size
             XBoundry = 7.38f;
             GameManager.scoreMult = 2;
         } else if (transform.localScale.x < 1.16f) {
@@ -152,15 +239,27 @@ public class PaddleMove : MonoBehaviour {
             XBoundry = 9.6f;
         }
 
-        float clampedX = Mathf.Clamp(mousePosition.x, -XBoundry + (paddleWidth / 2), XBoundry - (paddleWidth / 2));
-
         if (disableMovement > 0) {
-            disableMovement -= 1 * Time.deltaTime;
-        } else {
-            transform.position = new Vector3(clampedX, yPos, mousePosition.z);
+            disableMovement -= Time.deltaTime;
+            return;
         }
-    }
 
+        switch (controlType) {
+            case ControlType.Mouse:
+                mousePosition = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+                mousePosition.z = Camera.main.transform.position.z + Camera.main.nearClipPlane;
+                targetX = Mathf.Clamp(mousePosition.x, -XBoundry + (paddleWidth / 2), XBoundry - (paddleWidth / 2));
+                break;
+            case ControlType.Keyboard:
+            case ControlType.Gamepad:
+                moveInput = Input.GetAxisRaw("Horizontal");
+                float moveSpeed = 10f;
+                targetX += moveInput * (moveSpeed * mod) * Time.deltaTime;
+                targetX = Mathf.Clamp(targetX, -XBoundry + (paddleWidth / 2), XBoundry - (paddleWidth / 2));
+                break;
+        }
+        transform.position = new Vector3(targetX, yPos, 0f);
+    }
 
     void variableUpdate() {
         magnetOffset = GameManager.MagnetOffset;
