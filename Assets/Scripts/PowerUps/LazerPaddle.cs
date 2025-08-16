@@ -4,6 +4,7 @@ using UnityEngine;
 
 public class LazerPaddle : MonoBehaviour {
 
+    public int score = 75;
     public PaddleMove paddleMove;
 
     void Awake() {
@@ -19,8 +20,19 @@ public class LazerPaddle : MonoBehaviour {
             } else {
                 Debug.LogWarning("GameManager not found!");
             }
+            ScoreSpawn(score);
             Destroy(gameObject);
         }
     }
 
+    private void ScoreSpawn(int score)
+    {
+        if (GameManager.Instance != null)
+        {
+            GameManager.CurrentScore += score;
+            ScoreNumberController.instance.SpawnScore(score, transform.position);
+
+            GameManager.CanSpawnBall = false;
+        }
+    }
 }

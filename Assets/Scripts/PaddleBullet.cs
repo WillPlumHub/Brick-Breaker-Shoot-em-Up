@@ -49,7 +49,7 @@ public class PaddleBullet : MonoBehaviour {
             }
 
             //brick.GetComponent<ObjHealth>()?.TakeDamage(1, 1);
-            collision.gameObject.GetComponent<ObjHealth>()?.TakeDamage(1, 1);
+            collision.gameObject.GetComponent<ObjHealth>()?.TakeDamage(1, 1, 1);
             if (GameManager.Instance != null) {
                 GameManager.Instance.PlaySFX(GameManager.Instance.ballBounceSound);
             }

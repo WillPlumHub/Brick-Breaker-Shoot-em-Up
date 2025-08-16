@@ -5,9 +5,13 @@ using UnityEngine.SceneManagement;
 
 public class SceneLoad : MonoBehaviour {
 
-    public string sceneToLoad;
+    public LevelData sceneToLoad;
     
     void Awake() {
-        GameManager.nextScene = sceneToLoad;
+        if (sceneToLoad != null) {
+            GameManager.nextScene = sceneToLoad.StageName;
+        } else {
+            GameManager.nextScene = "";
+        }
     }
 }

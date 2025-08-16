@@ -510,7 +510,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bbb2b2dfc8bfc7f4d8435abe26b09557, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  playerInTrigger: 0
+  level: {fileID: 11400000, guid: b3fd73908c1ca7449ba4b244a86f48f9, type: 2}
 --- !u!212 &1903041045
 SpriteRenderer:
   m_ObjectHideFlags: 0

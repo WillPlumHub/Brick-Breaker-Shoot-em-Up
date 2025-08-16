@@ -10,6 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 8826087224518437413}
   - component: {fileID: 2875339355831979919}
+  - component: {fileID: 2863715990313049242}
   m_Layer: 0
   m_Name: LevelManager
   m_TagString: Untagged
@@ -44,5 +45,18 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c4574ef9ee5cf3a4eb8c4ff3a5502b5b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  sceneToLoad: TestScene2
-  blankTransitionTime: 1
+  sceneToLoad: {fileID: 11400000, guid: 45059f8ffb2383a4bbe5b4f51d29cfcb, type: 2}
+--- !u!114 &2863715990313049242
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8837856923810802480}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e3e9df96655aea743925f402ed0978a0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  boardStats: {fileID: 0}
+  boardTemplate: {fileID: 2483287522250135886, guid: 5c50657e5daed294da5f00f1873f9577, type: 3}

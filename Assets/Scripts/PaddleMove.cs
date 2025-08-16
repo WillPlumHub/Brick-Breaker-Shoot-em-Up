@@ -15,9 +15,12 @@ public class PaddleMove : MonoBehaviour {
     private float moveInput = 0f;
 
     [Header("Movement")]
+    public float mmmmmmmmmmmmmmmmmmmmmmmmmmmm;
+    public float modf;
     public float mod = 1;
     public float modDefault = 1;
-    public float yPos = -4f; // Paddle's Y position
+    public float baseYPos = -4f; // Resting position
+    public float currentYPos;   // Animated Y position
     public float disableMovement = 0f; // Time left disabled when hit
     public float XBoundry = 7.6f;
     private Vector3 mousePosition = new Vector3(0, 0, 0);
@@ -52,21 +55,51 @@ public class PaddleMove : MonoBehaviour {
     }
     
     void Awake() {
+        currentYPos = baseYPos;
+        maxFlipHeight = baseYPos + 0.5f;
         GameManager.IsGameStart = true;
         gameManager = GameObject.FindGameObjectWithTag("GameController").GetComponent<GameManager>();
+
+        UpdateXBoundary();
     }
-    
+
     void Update() {
         HandleInput();
         PaddleMovement();
         flip();
         variableUpdate();
+        sizeUpdate();
 
-        for (int i = 0; i <= 19; i++)
-        {
-            if (Input.GetKeyDown((KeyCode)(330 + i)))
-            {
+        for (int i = 0; i <= 19; i++) {
+            if (Input.GetKeyDown((KeyCode)(330 + i))) {
                 Debug.Log("Joystick Button Pressed: " + i);
+            }
+        }
+    }
+
+    void sizeUpdate() {
+        if (GameManager.levelLayers != null && GameManager.currentBoard < GameManager.levelLayers.Count) {
+            GameObject currentLayer = GameManager.levelLayers[GameManager.currentBoard];
+
+            Transform leftWall = null;
+            Transform rightWall = null;
+
+            foreach (Transform child in currentLayer.transform) {
+                if (child.name.StartsWith("LWall")) {
+                    leftWall = child;
+                } else if (child.name.StartsWith("RWall")) {
+                    rightWall = child;
+                }
+            }
+
+            if (leftWall != null && rightWall != null) {
+                float widthBetweenWalls = Mathf.Abs(rightWall.position.x - leftWall.position.x);
+                Vector3 scale = transform.localScale;
+                if (transform.localScale.x > widthBetweenWalls) {
+                    Debug.Log("Shrinking");
+                    scale.x /= 2;
+                    transform.localScale = scale;
+                }
             }
         }
     }
@@ -136,7 +169,8 @@ public class PaddleMove : MonoBehaviour {
                 foreach (var ball in GameManager.ActiveBalls) { // Check if any balls are stuck
                     if (ball != null && ball.GetComponent<BallMovement>().isStuckToPaddle) {
                         anyBallStuck = true;
-                        return;
+                        //return;
+                        break;
                     }
                 }
                 if (!anyBallStuck) {
@@ -149,7 +183,7 @@ public class PaddleMove : MonoBehaviour {
 
                     if (flipHeld && transform.position.y < maxFlipHeight) {
                         float currentY = transform.position.y;
-                        normalizedHeight = Mathf.InverseLerp(-4f, -3.8f, currentY);
+                        normalizedHeight = Mathf.InverseLerp(baseYPos, maxFlipHeight, currentY);
                         recoilSpeed = recoilCurve.Evaluate(normalizedHeight);
                     } else {
                         recoilSpeed = 5;
@@ -197,18 +231,35 @@ public class PaddleMove : MonoBehaviour {
         }
     }
 
+  
+            
+                                
+
+
     void MagnetPull() { // Magnet pull
         if (GameManager.IsGameStart || GameManager.ActiveBalls == null) return; // Don't bother conditions
 
         foreach (GameObject ball in GameManager.ActiveBalls) { // Iterate through balls
             if (ball == null) continue;
             BallMovement ballMovement = ball.GetComponent<BallMovement>();
-            if (ballMovement == null || ballMovement.isStuckToPaddle) continue;
+            if (ballMovement == null /*|| ballMovement.isStuckToPaddle*/) continue;
 
             float range = Mathf.Clamp01(1f - (Mathf.Abs(ball.transform.position.x - transform.position.x) / magnetOffset)); // Check if given ball is within magnet range
             bool isWithinOffset = range > 0f;
+
+
+            /*if (ballMovement.isStuckToPaddle) {
+                //Debug.Log("Skipping stuck ball: " + ball.name);
+                continue;
+            }*/
+
+            //Debug.Log("Applying magnet to: " + ball.name);
+
             
             if (isWithinOffset) { // Actually activate the magnet effect
+                if (ballMovement.isStuckToPaddle || (ballMovement.stickTarget != null && ballMovement.stickTarget != gameObject)) {
+                    ballMovement.ReleaseFromStick();
+                }
                 if (ballMovement.moveDir.y == 1) {
                     ballMovement.currentSpeed -= decellerate;
                 } else if (ballMovement.moveDir.y == -1) {
@@ -220,24 +271,10 @@ public class PaddleMove : MonoBehaviour {
         }
     }
 
-    void PaddleMovement() {
+    /*void PaddleMovement() {
+        UpdateXBoundary(); // Get accurate boundary based on room and paddle size
         float targetX = transform.position.x;
         float paddleWidth = transform.localScale.x;
-                
-        if (transform.localScale.x < 0.77f) { // Update bounds based on size
-            XBoundry = 7.38f;
-            GameManager.scoreMult = 2;
-        } else if (transform.localScale.x < 1.16f) {
-            XBoundry = 7.45f;
-        } else if (transform.localScale.x < 2.31f) {
-            XBoundry = 7.6f;
-        } else if (transform.localScale.x < 4.61f) {
-            XBoundry = 7.9f;
-        } else if (transform.localScale.x < 9.21f) {
-            XBoundry = 8.5f;
-        } else if (transform.localScale.x < 18.41f) {
-            XBoundry = 9.6f;
-        }
 
         if (disableMovement > 0) {
             disableMovement -= Time.deltaTime;
@@ -258,8 +295,196 @@ public class PaddleMove : MonoBehaviour {
                 targetX = Mathf.Clamp(targetX, -XBoundry + (paddleWidth / 2), XBoundry - (paddleWidth / 2));
                 break;
         }
-        transform.position = new Vector3(targetX, yPos, 0f);
+        transform.position = new Vector3(targetX, currentYPos, 0f);
+    }*/
+
+    /*void UpdateXBoundary() {
+        if (gameManager.currentLevelData != null && gameManager.currentLevelData.LevelRooms.Count > GameManager.currentBoard) {
+            float mod = 0;
+
+            if (transform.localScale.x < 1.12f) { // Update bounds based on size
+                mod = 0.9698f;
+                GameManager.scoreMult = 2;
+            } else if (transform.localScale.x < 1.666668f) {
+                mod = 0.986f;
+            } else if (transform.localScale.x < 2.51f) { // Base size
+                mod = 1;
+            } else if (transform.localScale.x < 3.751f) {
+                mod = 1.024f;
+            } else if (transform.localScale.x < 5.6251f) {
+                mod = 1.05222f;
+            } else if (transform.localScale.x < 8.43751f) {
+                mod = 1.10164f;
+            } else if (transform.localScale.x < 12.656251f) {
+                mod = 1.17456f;
+            } else if (transform.localScale.x < 18.984381f) {
+                mod = 1.211566f;
+            }
+            
+            float roomHalfWidth = gameManager.currentLevelData.LevelRooms[GameManager.currentBoard].x + (7.6f * mod);
+            Debug.Log("Size is: " + mod + ", Limit: " + (roomHalfWidth - (transform.localScale.x / 2)));
+
+            float paddleHalfWidth = transform.localScale.x / 2f;
+
+            XBoundry = roomHalfWidth;
+
+            //Debug.Log($"[Paddle] Room Half Width: {roomHalfWidth}, Paddle Half Width: {paddleHalfWidth}, XBoundry: {XBoundry}");
+        } else {
+            Debug.LogWarning("[Paddle] Invalid room index or missing LevelData.");
+        }
+    }*/
+
+
+    /*void UpdateXBoundary()
+    {
+        if (GameManager.levelLayers != null && GameManager.currentBoard < GameManager.levelLayers.Count)
+        {
+            GameObject currentLayer = GameManager.levelLayers[GameManager.currentBoard];
+
+            Transform leftWall = null;
+            Transform rightWall = null;
+
+            foreach (Transform child in currentLayer.transform)
+            {
+                if (child.name.StartsWith("LWall"))
+                {
+                    leftWall = child;
+                }
+                else if (child.name.StartsWith("RWall"))
+                {
+                    rightWall = child;
+                }
+            }
+
+            if (leftWall != null && rightWall != null)
+            {
+                float widthBetweenWalls = (Mathf.Abs(rightWall.position.x - leftWall.position.x) / 2f) + mmmmmmmmmmmmmmmmmmmmmmmmmmmm;
+
+                // Apply size-based mod like before
+                //modf = 1f;
+                float paddleScale = transform.localScale.x;
+
+                if (paddleScale < 1.12f) modf = 0.9698f;
+                else if (paddleScale < 1.666668f) modf = 0.986f;
+                else if (paddleScale < 2.51f) modf = 1f;
+                else if (paddleScale < 3.751f) modf = 1.02f;
+                else if (paddleScale < 5.6251f) modf = 1.045f;/*
+                else if (paddleScale < 8.43751f) modf = 1.10164f;
+                else if (paddleScale < 12.656251f) modf = 1.17456f;
+                else if (paddleScale < 18.984381f) modf = 1.211566f;
+
+                float adjustedHalfWidth = widthBetweenWalls * modf;
+                XBoundry = adjustedHalfWidth;
+
+                Debug.Log($"[Paddle] Width between walls: {widthBetweenWalls}, Mod: {modf}, XBoundry: {XBoundry}");
+            }
+            else
+            {
+                Debug.LogWarning("[Paddle] Could not find L Wall and/or R Wall in current level layer.");
+            }
+        }
+        else
+        {
+            Debug.LogWarning("[Paddle] Invalid levelLayers reference or board index.");
+        }
+    }*/
+
+    void UpdateXBoundary()
+    {
+        if (GameManager.levelLayers != null && GameManager.currentBoard < GameManager.levelLayers.Count)
+        {
+            GameObject currentLayer = GameManager.levelLayers[GameManager.currentBoard];
+
+            // Get current column from GameManager (assuming you've added this)
+            int currentColumn = GameManager.currentColumn;
+            float columnOffset = currentColumn * 23.6f; // Same offset used in LevelBuilder
+
+            Transform leftWall = null;
+            Transform rightWall = null;
+
+            foreach (Transform child in currentLayer.transform)
+            {
+                if (child.name.StartsWith("LWall"))
+                {
+                    leftWall = child;
+                }
+                else if (child.name.StartsWith("RWall"))
+                {
+                    rightWall = child;
+                }
+            }
+
+            if (leftWall != null && rightWall != null)
+            {
+                // Adjust wall positions by column offset
+                float leftWallPos = leftWall.position.x + columnOffset;
+                float rightWallPos = rightWall.position.x + columnOffset;
+
+                float widthBetweenWalls = (Mathf.Abs(rightWallPos - leftWallPos) / 2f) + mmmmmmmmmmmmmmmmmmmmmmmmmmmm;
+
+                // Apply size-based mod
+                float paddleScale = transform.localScale.x;
+                if (paddleScale < 1.12f) modf = 0.9698f;
+                else if (paddleScale < 1.666668f) modf = 0.986f;
+                else if (paddleScale < 2.51f) modf = 1f;
+                else if (paddleScale < 3.751f) modf = 1.02f;
+                else if (paddleScale < 5.6251f) modf = 1.045f;
+
+                float adjustedHalfWidth = widthBetweenWalls * modf;
+                XBoundry = adjustedHalfWidth;
+
+                Debug.Log($"[Paddle] Column: {currentColumn}, Width between walls: {widthBetweenWalls}, XBoundry: {XBoundry}");
+            }
+            else
+            {
+                Debug.LogWarning("[Paddle] Could not find walls in current level layer.");
+            }
+        }
+        else
+        {
+            Debug.LogWarning("[Paddle] Invalid levelLayers reference or board index.");
+        }
     }
+
+    void PaddleMovement()
+    {
+        UpdateXBoundary();
+        float targetX = transform.position.x;
+        float paddleWidth = transform.localScale.x;
+
+        if (disableMovement > 0)
+        {
+            disableMovement -= Time.deltaTime;
+            return;
+        }
+
+        switch (controlType)
+        {
+            case ControlType.Mouse:
+                mousePosition = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+                mousePosition.z = Camera.main.transform.position.z + Camera.main.nearClipPlane;
+                // Apply column offset to mouse position
+                float columnOffset = GameManager.currentColumn * 23.6f;
+                float mouseX = mousePosition.x - columnOffset;
+                targetX = Mathf.Clamp(mouseX, -XBoundry + (paddleWidth / 2), XBoundry - (paddleWidth / 2));
+                break;
+
+            case ControlType.Keyboard:
+            case ControlType.Gamepad:
+                moveInput = Input.GetAxisRaw("Horizontal");
+                float moveSpeed = 10f;
+                targetX += moveInput * (moveSpeed * mod) * Time.deltaTime;
+                targetX = Mathf.Clamp(targetX, -XBoundry + (paddleWidth / 2), XBoundry - (paddleWidth / 2));
+                break;
+        }
+
+        // Apply column offset to final position
+        float finalX = targetX + (GameManager.currentColumn * 23.6f);
+        transform.position = new Vector3(finalX, currentYPos, 0f);
+    }
+
+
+
 
     void variableUpdate() {
         magnetOffset = GameManager.MagnetOffset;
@@ -267,8 +492,8 @@ public class PaddleMove : MonoBehaviour {
     }
 
     void flip() {
-        float targetHeight = flipping ? maxFlipHeight : -4f;
-        yPos = Mathf.MoveTowards(yPos, targetHeight, flipSpeed * Time.deltaTime);
+        float targetHeight = flipping ? maxFlipHeight : baseYPos;
+        currentYPos = Mathf.MoveTowards(currentYPos, targetHeight, flipSpeed * Time.deltaTime);
     }
 
     void firePaddleLaser() {

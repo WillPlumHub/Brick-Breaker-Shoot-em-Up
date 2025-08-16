@@ -10,19 +10,23 @@ public class CameraShake : MonoBehaviour {
     
     // Update is called once per frame
     void Update() {
+
+    }
+
+    public void shake(float speed) {
         if (start) {
             start = false;
-            StartCoroutine(Shaking());
+            StartCoroutine(Shaking(speed));
         }
     }
 
-    IEnumerator Shaking() {
+    IEnumerator Shaking(float speed) {
         Vector3 startPos = transform.position;
         float elapsedTime = 0;
 
         while (elapsedTime < duration) {
             elapsedTime += Time.deltaTime;
-            float strength = curve.Evaluate(elapsedTime / duration);
+            float strength = curve.Evaluate(elapsedTime / duration) * speed;
             transform.position = startPos + Random.insideUnitSphere * strength;
             yield return null;
         }

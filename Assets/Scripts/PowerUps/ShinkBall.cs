@@ -4,6 +4,7 @@ using UnityEngine;
 
 public class ShinkBall : MonoBehaviour {
 
+    public int score = 75;
     public GameManager gameManager;
 
     void Awake() {
@@ -24,6 +25,19 @@ public class ShinkBall : MonoBehaviour {
                     ball.GetComponent<BallMovement>().ShrinkBall();
                 }
             }
+        }
+        ScoreSpawn(score);
+        Destroy(gameObject);
+    }
+
+    private void ScoreSpawn(int score)
+    {
+        if (GameManager.Instance != null)
+        {
+            GameManager.CurrentScore += score;
+            ScoreNumberController.instance.SpawnScore(score, transform.position);
+
+            GameManager.CanSpawnBall = false;
         }
     }
 }   

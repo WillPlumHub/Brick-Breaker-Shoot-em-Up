@@ -4,6 +4,7 @@ using UnityEngine;
 
 public class SlowBall : MonoBehaviour {
 
+    public int score = 75;
     public GameManager gameManager;
 
     void Awake() {
@@ -27,6 +28,18 @@ public class SlowBall : MonoBehaviour {
         } else {
             Debug.LogWarning("GameManager not found!");
         }
+        ScoreSpawn(score);
         Destroy(gameObject);
+    }
+
+    private void ScoreSpawn(int score)
+    {
+        if (GameManager.Instance != null)
+        {
+            GameManager.CurrentScore += score;
+            ScoreNumberController.instance.SpawnScore(score, transform.position);
+
+            GameManager.CanSpawnBall = false;
+        }
     }
 }

@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.SocialPlatforms.Impl;
 
@@ -31,12 +32,13 @@ public class ObjHealth : MonoBehaviour {
         transform.position = snappedPosition;
     }
 
-    public void TakeDamage(int damage, int scoreMult) {
+    public void TakeDamage(int damage, int scoreMult, float speed) {
         if (!Invincibility) {
             health -= damage;
 
             if (CameraShake) {
                 cameraShake.start = true;
+                cameraShake.shake(speed);
             }
 
             if (health <= 0 || GameManager.BrickThu) {
@@ -54,9 +56,9 @@ public class ObjHealth : MonoBehaviour {
     private void DestroyBlock(int scoreMult) {
 
         float rand = Random.Range(0f, 100f);
-        Debug.Log("Chance: " + rand);
+        //Debug.Log("Chance: " + rand);
         if (rand < powerUpOdds && !CameraShake) {
-            Debug.Log("Got a power up");
+            //Debug.Log("Got a power up");
             GameManager.Instance.PowerUpSpawn(rand, transform.position);
             //Instantiate power up
         }
@@ -65,7 +67,7 @@ public class ObjHealth : MonoBehaviour {
 
         ScoreSpawn(score);
 
-        Debug.Log("Score Given: " + scoreValue + " * " + scoreMult + " = " + score);
+        //Debug.Log("Score Given: " + scoreValue + " * " + scoreMult + " = " + score);
 
         
 

@@ -1,10 +1,10 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityEngine.UIElements;
-using static UnityEngine.Rendering.VirtualTexturing.Debugging;
+
 
 public class GameManager : MonoBehaviour {
 
@@ -15,11 +15,10 @@ public class GameManager : MonoBehaviour {
     public TMP_Text scoreText;
     public static bool IsGameStart;
     public static int CurrentScore;
-    public static float StageSpeed;
     public int targetScore = CurrentScore + 50;
     public static int scoreMult = 1;
     public float timer = 10; 
-    [SerializeField] public static bool ceilinigDestroyed = false;
+    public static bool ceilinigDestroyed = false;
     
     [Header("Paddle")]
     public static float DisableTimer;
@@ -31,19 +30,37 @@ public class GameManager : MonoBehaviour {
     public static float BallSpeed = 3f;
     public static bool CanSpawnBall = false;
     public static List<GameObject> ActiveBalls = new List<GameObject>(); //balls
-    [SerializeField] private List<GameObject> ballsInEditor; //_balls
+    [SerializeField] private List<GameObject> ballsInEditor; //_balls Debug
 
     [Header("Bricks")]
-    public GameObject brickContainer;
+    public GameObject brickcontainer; 
+    public static GameObject brickContainer;
+    
     public static int brickCount;
     public int initialBrickCount;
-    public int publicBrickCount = 0; // For debugging in Inspector
+    public int publicBrickCount = 0; // Debug
 
     [Header("Level")]
+    public static List<GameObject> levelLayers;
+    public List<GameObject> LevelLayers;
+    private bool isRemovingBoard = false;
+    public static int numberOfBoards;
+    public int boardAmount = 1;
+    public static int currentBoard = 0;
+    public int currentboard = 0;
+    public static int currentColumn = 0;
+    public int currentcolumn = 0;
     public static string nextScene;
-    public string publicNextScene; // For debugging in Inspector
+    public string publicNextScene; // Debug
     public float blankTransitionTime;
     public bool hasLoadedNextLevel;
+
+    public float moveSpeed;
+    public static bool isShiftingDown = false;
+    public bool shiftingDown = false;
+
+    public static LevelData currentLevelData;
+
 
     [Header("Power Ups")]
     public bool brickThu = false;
@@ -51,11 +68,11 @@ public class GameManager : MonoBehaviour {
     public bool superShrink = false;
     public bool gravityBall = false;
     //public int paddleSizeMod = 0;
-    public int PaddleSizeMod = 1;
+    public float PaddleSizeMod = 1;
     public static bool BrickThu = false;
     public static bool FireBall = false;
     public static bool GravityBall = false;
-    public List<PowerUpData> powerUps; // Populate in Inspector
+    public List<PowerUpData> powerUps;
 
     [Header("Audio")]
     [SerializeField] private AudioSource musicSource;
@@ -66,34 +83,74 @@ public class GameManager : MonoBehaviour {
     public AudioClip perfectFlipSound;
     public AudioClip flipSound;
 
+
+    #region Set up
     private void Awake() {
+        GameObject levelManagerObj = GameObject.Find("LevelManager");
+        if (levelManagerObj == null) {
+            Debug.LogWarning("LevelManager GameObject not found.");
+        } else {
+            LevelBuilder levelBuilder = levelManagerObj.GetComponent<LevelBuilder>();
+            if (levelBuilder == null) {
+                Debug.LogWarning("LevelBuilder component not found on LevelManager.");
+            } else if (levelBuilder.boardStats == null) {
+                Debug.LogWarning("No LevelData (boardStats) assigned in LevelBuilder.");
+            }
+        }
+
+
+        numberOfBoards = GameObject.Find("LevelManager").GetComponent<LevelBuilder>().boardStats.LevelRooms.Count;
+        //Debug.Log("NumBoards: " + GameObject.Find("LevelManager").GetComponent<LevelBuilder>().boardStats.LevelRooms.Count);
         HandleSingleton();
         InitializeAudio();
         SceneManager.sceneLoaded += OnSceneLoaded;
+
+        RebuildLevelLayers(); // Replaces manual object scan
+        boardAmount = levelLayers.Count;
+    }
+
+    private void OnEnable() {
+        SceneManager.sceneLoaded += OnSceneLoaded;
+    }
+
+    private void OnDisable() {
+        SceneManager.sceneLoaded -= OnSceneLoaded;
     }
 
     private void OnDestroy() {
         SceneManager.sceneLoaded -= OnSceneLoaded;
     }
 
+    public void RebuildLevelLayers() {
+        if (levelLayers == null) levelLayers = new List<GameObject>();
+        else levelLayers.Clear();
+
+        LevelBuilder levelBuilder = GameObject.Find("LevelManager")?.GetComponent<LevelBuilder>();
+        if (levelBuilder == null || levelBuilder.CreatedBoards == null) {
+            Debug.LogError("LevelBuilder or CreatedBoards is missing.");
+            return;
+        }
+        levelLayers = new List<GameObject>(levelBuilder.CreatedBoards);
+        levelLayers.Sort((a, b) => a.transform.position.y.CompareTo(b.transform.position.y));
+    }
+    #endregion
+
     private void Start() {
         ceilinigDestroyed = false;
         InitializeGame();
-        StartCoroutine(CountBricksAfterLoad());
     }
 
     private void Update() {
-        //Debug.Log("Balls: " + ActiveBalls.Count);
         UpdateDebugValues();
         UpdateGameState();
         HandleScore();
         CheckGameState();
-
-        if (brickCount <= 0 && !hasLoadedNextLevel && !IsGameStart) {
-            LoadNextLevel();
+        CountBricks();
+        if (!isShiftingDown && !isRemovingBoard)
+        {
+            transitionCheck();
         }
 
-        
         if (scoreMult != 1 && ActiveBalls.Count > 0 && !IsGameStart) {
             timer -= (1 * Time.deltaTime);
             //Debug.Log("x2 timer: " + timer);
@@ -103,19 +160,294 @@ public class GameManager : MonoBehaviour {
             scoreMult = 1;
             timer = 10;
         }
-
-        BrickThu = brickThu;
-        FireBall = fireBall;
-        //PaddleSizeMod = paddleSizeMod;
-        GravityBall = gravityBall;
-
-        /*if (Input.GetButtonDown("Jump")) {
-            expandPaddle();
-        }
-        if (Input.GetButtonDown("Fire3")) {
-            shrinkPaddle();
-        }*/
     }
+
+
+
+
+
+    public void transitionCheck() {
+        if (!hasLoadedNextLevel && !IsGameStart && !isRemovingBoard /*&& Input.GetButtonDown("Jump")*/) {
+            if (currentBoard < 0 || currentBoard >= levelLayers.Count || isShiftingDown) {
+                Debug.LogWarning("Current board does not exist or is shifting. Aborting board logic.");
+                return;
+            }
+
+            GameObject currentLayer = levelLayers[currentBoard];
+            Transform roofTransform = currentLayer.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name.StartsWith("Roof"));
+            if (roofTransform == null) return;
+
+            float heightLimit = -4.5f + (10f * (currentBoard + 1f));
+            float roofDelta = roofTransform.position.y - heightLimit;
+
+            // Scroll roof if needed
+            if (roofDelta > 0.01f && !isShiftingDown) {
+                List<Transform> layersToMove = GetLayersFromIndex(currentBoard);
+                StartCoroutine(MoveLayersDown(layersToMove, referenceTransform: roofTransform, targetY: heightLimit, speed: moveSpeed));
+            }
+
+            // Brick-less transition ONLY when bricks are gone AND scrolling is done AND roof is at target
+            if (brickCount <= 0) {
+                if (roofDelta <= 0.01f && !isShiftingDown) {
+                    if (levelLayers.Count > 1 && currentBoard < levelLayers.Count - 1 && currentLevelData.LevelRooms[currentBoard].z == 0) {
+                        isRemovingBoard = true;
+                        StartCoroutine(BoardRemovalSequence());
+                    }
+                    else if (levelLayers.Count > 1 && currentBoard < levelLayers.Count - 1 && currentLevelData.LevelRooms[currentBoard].z != 0) {
+                        currentColumn = 0;
+                        Debug.Log("WWWWORKED: " + currentColumn);
+                    } else {
+                        hasLoadedNextLevel = true;
+                        StopAllCoroutines();
+                        LoadNextLevel();
+                    }
+                } else {
+                    Debug.Log("Bricks are gone, but roof is still descending or scrolling active. Transition delayed.");
+                }
+            }
+        }
+    }
+
+    private List<Transform> GetLayersFromIndex(int startIndex) {
+        List<Transform> layersToMove = new List<Transform>();
+        for (int i = startIndex; i < levelLayers.Count; i++) {
+            if (levelLayers[i] != null) {
+                layersToMove.Add(levelLayers[i].transform);
+            }
+        }
+        return layersToMove;
+    }
+
+    private IEnumerator MoveLayersDown(List<Transform> layers, float? fixedDistance = null, float? duration = null, Transform referenceTransform = null, float? targetY = null, float speed = 5f) {
+
+        isShiftingDown = true;
+
+        if (fixedDistance.HasValue && duration.HasValue) {
+            // Fixed-distance move using Lerp
+            float elapsed = 0f;
+            List<Vector3> startPositions = layers.Select(l => l.position).ToList();
+            List<Vector3> endPositions = startPositions.Select(pos => pos - new Vector3(0, fixedDistance.Value, 0)).ToList();
+
+            while (elapsed < duration.Value) {
+                for (int i = 0; i < layers.Count; i++) {
+                    layers[i].position = Vector3.Lerp(startPositions[i], endPositions[i], elapsed / duration.Value);
+                }
+                elapsed += Time.deltaTime;
+                yield return null;
+            }
+
+            for (int i = 0; i < layers.Count; i++) {
+                layers[i].position = endPositions[i];
+            }
+        } else if (referenceTransform != null && targetY.HasValue) {
+            // Move until reference transform reaches targetY (previously MoveLayersToTargetY)
+            while (referenceTransform.position.y > targetY.Value) {
+                float step = speed * Time.deltaTime;
+                foreach (Transform layer in layers) {
+                    layer.position -= new Vector3(0, step, 0);
+                }
+                yield return null;
+            }
+            float overshoot = referenceTransform.position.y - targetY.Value;
+            foreach (Transform layer in layers) {
+                layer.position -= new Vector3(0, overshoot, 0);
+            }
+        }
+        isShiftingDown = false;
+    }
+
+    public IEnumerator BoardRemovalSequence() {
+        RemoveCurrentBoard();
+        yield return new WaitForSeconds(0.6f); // Allow movement to complete
+        isRemovingBoard = false;
+    }
+
+    private void RemoveCurrentBoard() {
+        if (currentBoard < 0 || currentBoard >= levelLayers.Count) {
+            Debug.LogWarning("Current board index out of bounds. Aborting removal.");
+            return;
+        }
+
+        isShiftingDown = true;
+
+        // Cache transforms to move
+        List<Transform> layersToMove = GetLayersFromIndex(currentBoard + 1);
+
+        Debug.Log("WORKED" + currentColumn);
+        if (currentColumn != 0)
+        {
+            Debug.Log("Resetting Ball POS");
+            foreach (var ball in GameManager.ActiveBalls)
+            {
+                if (ball != null)
+                {
+                    ball.transform.position = Vector3.zero;
+                }
+            }
+        }
+
+        // Remove and destroy current board
+        GameObject removedLayer = levelLayers[currentBoard];
+        levelLayers.RemoveAt(currentBoard);
+        numberOfBoards--;
+        Destroy(removedLayer);
+
+        // Update board index
+        if (currentBoard >= levelLayers.Count) {
+            currentBoard = Mathf.Max(0, levelLayers.Count - 1);
+        }
+
+        // Move layers down smoothly
+        StartCoroutine(MoveLayersDown(layersToMove, fixedDistance: 10f, duration: 0.5f));
+
+        
+
+        // Final checks
+        if (currentBoard >= 0 && currentBoard < levelLayers.Count) {
+            CountBricks();
+        } else {
+            hasLoadedNextLevel = true;
+            LoadNextLevel();
+        }
+        //isShiftingDown = false;
+    }
+
+
+
+
+
+
+
+
+
+
+
+    public void CountBricks()
+    {
+        if (levelLayers == null || levelLayers.Count == 0)
+        {
+            Debug.LogError("levelLayers is null or empty.");
+            return;
+        }
+
+        if (currentBoard < 0)
+        {
+            Debug.LogError("currentBoard index is out of bounds: " + currentBoard);
+            currentBoard = 0;
+        }
+        if (currentBoard >= levelLayers.Count)
+        {
+            Debug.LogError("currentBoard index is out of bounds: " + currentBoard);
+            currentBoard = levelLayers.Count - 1;
+        }
+
+        GameObject currentLayer = levelLayers[currentBoard];
+        if (currentLayer == null)
+        {
+            Debug.LogError("levelLayers[" + currentBoard + "] is null.");
+            return;
+        }
+
+        if (brickContainer == null)
+        {
+            Transform blockListTransform = currentLayer.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name.StartsWith("BlockList"));
+
+            if (blockListTransform != null)
+            {
+                brickContainer = blockListTransform.gameObject;
+            }
+            else
+            {
+                Debug.LogWarning("BlockList not found under " + currentLayer.name);
+            }
+        }
+
+        brickCount = 0;
+        if (brickContainer == null)
+        {
+            GameObject[] bricks = GameObject.FindGameObjectsWithTag("Brick");
+            foreach (GameObject brick in bricks)
+            {
+                ObjHealth health = brick.GetComponent<ObjHealth>();
+                if (brick.activeInHierarchy && health != null && !health.Invincibility)
+                {
+                    brickCount++;
+                }
+            }
+            if (initialBrickCount == 0)
+            {
+                initialBrickCount = brickCount;
+            }
+            return;
+        }
+
+        foreach (Transform child in brickContainer.transform)
+        {
+            ObjHealth health = child.GetComponent<ObjHealth>();
+            if (child.gameObject.activeInHierarchy && health != null && !health.Invincibility)
+            {
+                brickCount++;
+            }
+        }
+
+        if (initialBrickCount == 0)
+        {
+            initialBrickCount = brickCount;
+        }
+
+        // If side room has no bricks left, remove it and return to center
+        // If side room has no bricks left, remove it and return to center
+        if (brickCount <= 0 && currentcolumn != 0)
+        {
+            Debug.Log("Side room cleared. Returning to central room and removing this board.");
+            RemoveAndReturnToMostRecentCentralRoom();
+        }
+
+    }
+
+    private void RemoveAndReturnToMostRecentCentralRoom()
+    {
+        if (currentBoard < 0 || currentBoard >= levelLayers.Count)
+            return;
+
+        // Remove current side room
+        GameObject removedLayer = levelLayers[currentBoard];
+        levelLayers.RemoveAt(currentBoard);
+        Destroy(removedLayer);
+        numberOfBoards--;
+
+        // Search backward for the most recent central board (z != 0)
+        int centralIndex = -1;
+        for (int i = currentBoard - 1; i >= 0; i--)
+        {
+            if (currentLevelData.LevelRooms[i].z != 0)
+            {
+                centralIndex = i;
+                break;
+            }
+        }
+
+        // If found, set currentBoard to that index; otherwise fallback to first board
+        if (centralIndex >= 0)
+            currentBoard = centralIndex;
+        else
+            currentBoard = Mathf.Max(0, levelLayers.Count - 1);
+
+        currentColumn = 0;
+
+        // Reset ball positions
+        foreach (var ball in ActiveBalls)
+        {
+            if (ball != null)
+                ball.transform.position = Vector3.zero;
+        }
+
+        // Reset brick container for the new board
+        brickContainer = null;
+        CountBricks();
+    }
+
+
 
 
 
@@ -132,7 +464,7 @@ public class GameManager : MonoBehaviour {
     public void shrinkPaddle() {
         GameObject paddle = GameObject.Find("Paddle");
         Vector3 scale = paddle.transform.localScale;
-        if (scale.x > 0.76f) {
+        if (scale.x > 0.625f) {
             scale.x /= PaddleSizeMod;
             paddle.transform.localScale = scale;
         }
@@ -141,9 +473,11 @@ public class GameManager : MonoBehaviour {
 
     public void superShrinkPaddle() {
         GameObject paddle = GameObject.Find("Paddle"); 
-        paddle.transform.localScale = new Vector3(0.76f, 1.8f, 0.54922f);
+        paddle.transform.localScale = new Vector3(0.7407407f, 1.8f, 0.54922f);
     }
 
+
+    
     public void BrickZap() {
         GameObject[] bricks = GameObject.FindGameObjectsWithTag("Brick");
         foreach (GameObject brick in bricks) {
@@ -167,7 +501,7 @@ public class GameManager : MonoBehaviour {
             int index = Random.Range(0, availableBricks.Count);
             if (availableBricks[index].GetComponent<ObjHealth>() != null) {
                 // Lightning Strike animation
-                availableBricks[index].GetComponent<ObjHealth>().TakeDamage((int)availableBricks[index].GetComponent<ObjHealth>().health, 1);
+                availableBricks[index].GetComponent<ObjHealth>().TakeDamage((int)availableBricks[index].GetComponent<ObjHealth>().health, 1, 0);
             }
             availableBricks.RemoveAt(index);
         }
@@ -181,11 +515,11 @@ public class GameManager : MonoBehaviour {
 
             if (odds <= cumulative) {
                 Instantiate(powerUp.prefab, spawnPos, Quaternion.identity);
-                Debug.Log($"Spawned PowerUp: {powerUp.itemName}");
+                //Debug.Log($"Spawned PowerUp: {powerUp.itemName}");
                 return;
             }
         }
-        Debug.Log("No Power-up Spawned.");
+        //Debug.Log("No Power-up Spawned.");
     }
     #endregion
 
@@ -316,36 +650,6 @@ public class GameManager : MonoBehaviour {
 
 
     #region Game Logic
-    public void CountBricks() {
-        if (brickContainer == null) {
-            brickContainer = GameObject.Find("BlockList");
-        }
-
-        brickCount = 0;
-
-        if (brickContainer == null) { // Fallback in case no container is found
-            GameObject[] bricks = GameObject.FindGameObjectsWithTag("Brick");
-            foreach (GameObject brick in bricks) {
-                if (brick.activeInHierarchy && !brick.GetComponent<ObjHealth>().Invincibility) {
-                    brickCount++;
-                }
-            }
-            
-            initialBrickCount = (initialBrickCount ==0) ? brickCount : initialBrickCount;  // Set initial count
-            return;
-        }
-
-        foreach (Transform child in brickContainer.transform) { // Count active bricks in container
-            if (child.gameObject.activeInHierarchy && !child.GetComponent<ObjHealth>().Invincibility) {
-                brickCount++;
-            }
-        }
-
-        if (initialBrickCount == 0) { // Only set initial count if this is the first count
-            initialBrickCount = brickCount;
-        }
-    }
-
     private void UpdateGameState() {
         ballsInEditor = new List<GameObject>(ActiveBalls);
 
@@ -376,19 +680,30 @@ public class GameManager : MonoBehaviour {
 
     public void LoadNextLevel() {
         if (!string.IsNullOrEmpty(nextScene)) {
+            hasLoadedNextLevel = true;
+            StopAllCoroutines(); // Stop coroutines using old scene data
             SceneManager.LoadScene(nextScene);
-        } else {
-            ceilinigDestroyed = true;
-            StartCoroutine(DestroyCeiling(blankTransitionTime));
+            numberOfBoards = GameObject.Find("LevelManager").GetComponent<LevelBuilder>().boardStats.LevelRooms.Count;
         }
+        /*else if (numberOfBoards == 1)
+        {
+            ceilinigDestroyed = true;
+            if (CeilingDestroy.Instance != null) {
+                CeilingDestroy.Instance.StartDestroyCeiling(blankTransitionTime);
+            } else {
+                Debug.LogWarning("CeilingManager.Instance is null. Cannot destroy ceiling.");
+            }
+        }*/
+
     }
 
-    private IEnumerator DestroyCeiling(float waitTime) {
+
+    /*private IEnumerator DestroyCeiling(float waitTime) {
         yield return new WaitForSeconds(waitTime);
         GameObject barrier = GameObject.Find("Ceiling");
         if (barrier != null)
             Destroy(barrier);
-    }
+    }*/
     #endregion
 
 
@@ -400,13 +715,8 @@ public class GameManager : MonoBehaviour {
         hasLoadedNextLevel = false;
         brickContainer = null;
         scoreText = null;
-        //ActiveBalls = new List<GameObject>();
-        StartCoroutine(CountBricksAfterLoad());
-    }
-
-    private IEnumerator CountBricksAfterLoad() {
-        yield return null; // Wait one frame
-        CountBricks();
+        RebuildLevelLayers();
+        currentBoard = 0;
     }
     #endregion
 
@@ -426,6 +736,17 @@ public class GameManager : MonoBehaviour {
     private void UpdateDebugValues() {
         publicBrickCount = brickCount;
         publicNextScene = nextScene;
+        boardAmount = numberOfBoards;
+        BrickThu = brickThu;
+        FireBall = fireBall;
+        //PaddleSizeMod = paddleSizeMod;
+        GravityBall = gravityBall;
+        currentboard = currentBoard;
+        publicBrickCount = brickCount;
+        LevelLayers = levelLayers;
+        brickcontainer = brickContainer;
+        shiftingDown = isShiftingDown;
+        currentcolumn = currentColumn;
     }
     #endregion
 }
