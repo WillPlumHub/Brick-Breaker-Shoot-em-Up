@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-public class LevelBuilder : MonoBehaviour
-{
+public class LevelBuilder : MonoBehaviour {
+
     public LevelData boardStats;
     public GameObject boardTemplate;
     public GameObject finalBoardTemplate;
@@ -15,15 +15,18 @@ public class LevelBuilder : MonoBehaviour
 
     private GameObject lastVerticalBoard;
 
-    private void Awake()
-    {
+    private void Awake() {
         if (boardStats == null) return;
 
-        for (int i = boardStats.LevelRooms.Count - 1; i >= 0; i--)
-        {
-            if (boardStats.LevelRooms[i].z == 0f)
-            {
+        for (int i = boardStats.LevelRooms.Count - 1; i >= 0; i--) {
+            if (boardStats.LevelRooms[i].z == 0f) {
                 finalBoardIndex = i;
+                if (boardStats.LevelRooms[i - 1].z != 0) {
+                    finalBoardIndex--;
+                }
+                if (boardStats.LevelRooms[i - 2].z != 0) {
+                    finalBoardIndex--;
+                }
                 break;
             }
         }
@@ -34,13 +37,11 @@ public class LevelBuilder : MonoBehaviour
         Vector3 lastVerticalPosition = verticalStackPosition;
         Vector3 transitionPos = Vector3.zero;
 
-        for (int i = 0; i < boardStats.LevelRooms.Count; i++)
-        {
+        for (int i = 0; i < boardStats.LevelRooms.Count; i++) {
             Vector3 spawnPosition;
             GameObject currentBoard = null;
 
-            if (boardStats.LevelRooms[i].z != 0f)
-            {
+            if (boardStats.LevelRooms[i].z != 0f) { // Side rooms
                 float direction = Mathf.Sign(boardStats.LevelRooms[i].z);
                 float horizontalOffset = direction * 23.6f;
                 spawnPosition = lastVerticalPosition + new Vector3(horizontalOffset, 0f, 0f);
@@ -49,7 +50,7 @@ public class LevelBuilder : MonoBehaviour
 
                 currentBoard = RoomAdjust(spawnPosition, i);
 
-                // Main ↔ Side transition pair
+                // Main/Side room XTransition pair
                 Vector3 transitionPos1 = new Vector3(spawnPosition.x - wallOffset - baseOffset, spawnPosition.y, 0f);
                 GameObject trans1 = Instantiate(XTransition, transitionPos1, Quaternion.identity);
                 trans1.GetComponent<XTransition>().transition = 0; // entering main column
@@ -62,9 +63,7 @@ public class LevelBuilder : MonoBehaviour
 
                 trans1.GetComponent<XTransition>().partnerTransition = trans2;
                 trans2.GetComponent<XTransition>().partnerTransition = trans1;
-            }
-            else
-            {
+            } else { // Main central rooms
                 spawnPosition = verticalStackPosition;
                 lastVerticalPosition = verticalStackPosition;
                 transitionPos.x = boardStats.LevelRooms[i].x;
@@ -79,27 +78,25 @@ public class LevelBuilder : MonoBehaviour
         GameManager.currentLevelData = boardStats;
     }
 
-    public GameObject RoomAdjust(Vector3 spawnPosition, int i)
-    {
+    public GameObject RoomAdjust(Vector3 spawnPosition, int i) {
         GameObject board;
 
-        if (i >= finalBoardIndex || boardStats.LevelRooms[i].z != 0f)
-        {
+        if (i >= finalBoardIndex) {
             board = Instantiate(finalBoardTemplate, spawnPosition, Quaternion.identity);
-        }
-        else
-        {
+        } else {
             board = Instantiate(boardTemplate, spawnPosition, Quaternion.identity);
         }
 
         CreatedBoards.Add(board);
 
+        // Adjust L/RWalls' X based on LevelRoom's X value
         Transform LWall = board.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name.StartsWith("LWall"));
         if (LWall != null) LWall.position = new Vector3(LWall.position.x - boardStats.LevelRooms[i].x, LWall.position.y, LWall.position.z);
 
         Transform RWall = board.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name.StartsWith("RWall"));
         if (RWall != null) RWall.position = new Vector3(RWall.position.x + boardStats.LevelRooms[i].x, RWall.position.y, RWall.position.z);
 
+        // Adjust Roof's Y based on LevelRoom's Y value
         Transform Roof = board.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name.StartsWith("Roof"));
         if (Roof != null) Roof.position = new Vector3(Roof.position.x, Roof.position.y + boardStats.LevelRooms[i].y, Roof.position.z);
 

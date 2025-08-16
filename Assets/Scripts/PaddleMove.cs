@@ -433,7 +433,7 @@ public class PaddleMove : MonoBehaviour {
                 float adjustedHalfWidth = widthBetweenWalls * modf;
                 XBoundry = adjustedHalfWidth;
 
-                Debug.Log($"[Paddle] Column: {currentColumn}, Width between walls: {widthBetweenWalls}, XBoundry: {XBoundry}");
+                //Debug.Log($"[Paddle] Column: {currentColumn}, Width between walls: {widthBetweenWalls}, XBoundry: {XBoundry}");
             }
             else
             {

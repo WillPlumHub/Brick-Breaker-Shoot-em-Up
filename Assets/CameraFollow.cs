@@ -1,28 +1,33 @@
 ﻿using UnityEngine;
 
-public class CameraFollow : MonoBehaviour
-{
+public class CameraFollow : MonoBehaviour {
+    
     public float mod = -1.56f;
+    public float movementSpeed = 10;
 
-    void LateUpdate()
-    {
-        var rooms = GameManager.currentLevelData.LevelRooms;
+    void LateUpdate() {
+        var levelLayers = GameManager.levelLayers;
+        var LevelRooms = GameManager.currentLevelData.LevelRooms;
         int boardIndex = GameManager.currentBoard;
 
         Vector3 roomPos;
 
         // Main room: use its Y directly
-        if (rooms[boardIndex].z == 0f)
+        if (LevelRooms[boardIndex].z == 0f)
         {
-            roomPos = rooms[boardIndex];
+            roomPos = levelLayers[boardIndex].transform.position;
+            Debug.Log("1 RoomPos.y: " + roomPos.y);
+            Debug.Log("boardIndex: " + boardIndex);
         }
         else
         {
             // Side room: use main room's Y
             int mainRoomIndex = FindAssociatedMainRoom(boardIndex);
             Debug.Log("MainRoomIndex: " + mainRoomIndex);
-            roomPos = rooms[boardIndex];
-            roomPos.y = rooms[mainRoomIndex].y;
+            Debug.Log("boardIndex: " + boardIndex);
+            roomPos = levelLayers[boardIndex].transform.position;
+            roomPos.y = LevelRooms[mainRoomIndex].y;
+            Debug.Log("2 RoomPos.y: " + roomPos.y);
         }
 
         // Horizontal offset based on column
@@ -33,7 +38,9 @@ public class CameraFollow : MonoBehaviour
         float targetX = mod + (GameManager.currentColumn * 25.10178f);
 
         // Snap directly to calculated target
-        transform.position = new Vector3(targetX, roomPos.y, transform.position.z);
+        //transform.position = new Vector3(targetX, roomPos.y, transform.position.z);
+        Vector3 target = new Vector3(targetX, roomPos.y, transform.position.z);
+        transform.position = Vector3.MoveTowards(transform.position, target, movementSpeed * Time.deltaTime);
     }
 
     private int FindAssociatedMainRoom(int boardIndex)
@@ -43,9 +50,11 @@ public class CameraFollow : MonoBehaviour
         {
             Debug.Log("Main Index: " + i);
             if (GameManager.currentLevelData.LevelRooms[i].z == 0f)
+            {
                 Debug.Log("Main Index: Found it: " + i);
                 return i;
+            }
         }
-        return 15;
+        return boardIndex;
     }
 }

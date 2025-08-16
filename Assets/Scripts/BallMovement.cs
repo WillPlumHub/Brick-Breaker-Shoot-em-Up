@@ -59,7 +59,7 @@ public class BallMovement : MonoBehaviour {
 
     private void Update() {
         //Debug.Log("Ball position: " + transform.position);
-        Debug.Log("Resetting because: " + transform.position + ", passed: " + (GameManager.currentLevelData.LevelRooms[GameManager.currentBoard].x));
+        //Debug.Log("Resetting because: " + transform.position + ", passed: " + (GameManager.currentLevelData.LevelRooms[GameManager.currentBoard].x));
         if (transform.position.x >= 8.3f) {
             Debug.Log("Hit boundry");
         }
@@ -126,12 +126,26 @@ public class BallMovement : MonoBehaviour {
             return;
         }
 
-        int boardCount = GameManager.levelLayers?.Count ?? 0;
+        int boardCount;
+        if (GameManager.levelLayers == null) {
+            boardCount = 0;
+        } else {
+            boardCount = GameManager.levelLayers.Count;
+        }
         int currentBoard = GameManager.currentBoard;
 
         // Try to move UP a board
         if (transform.position.y > paddleMove.baseYPos + 10 && currentBoard + 1 < boardCount && !GameManager.isShiftingDown) {
-            GameManager.currentBoard++;
+            //GameManager.currentBoard++;
+            Debug.Log("GOING UP: BallMovement for loop activated");
+            for (int i = GameManager.currentBoard + 1;  i < boardCount; i++) {
+                if (GameManager.currentLevelData.LevelRooms[i].z == GameManager.currentLevelData.LevelRooms[GameManager.currentBoard].z) {
+                //if (GameManager.levelLayers[i] == 0) {
+                    Debug.Log("GOING UP FINAL: CurrentBoard is: " + GameManager.currentBoard + ": " + GameManager.currentLevelData.LevelRooms[GameManager.currentBoard].z + " -> " + GameManager.currentLevelData.LevelRooms[i].z + ", thus " + i);
+                    GameManager.currentBoard = i;
+                    break;
+                }
+            }
             paddleMove.currentYPos += 10;
             paddleMove.baseYPos += 10;
             paddleMove.maxFlipHeight += 10;
@@ -139,7 +153,16 @@ public class BallMovement : MonoBehaviour {
 
         // Try to move DOWN a board
         if (transform.position.y < paddleMove.baseYPos - 2 && GameManager.currentBoard > 0 && !GameManager.isShiftingDown) {
-            GameManager.currentBoard--;
+            //GameManager.currentBoard--;
+            Debug.Log("GOING DOWN: BallMovement for loop activated");
+            for (int i = GameManager.currentBoard - 1; i >= 0; i--) {
+                if (GameManager.currentLevelData.LevelRooms[i].z == GameManager.currentLevelData.LevelRooms[GameManager.currentBoard].z) {
+                    //if (GameManager.levelLayers[i] == 0) {
+                    Debug.Log("GOING DOWN FINAL: CurrentBoard is: " + GameManager.currentBoard + ": " + GameManager.currentLevelData.LevelRooms[GameManager.currentBoard].z + " -> " + GameManager.currentLevelData.LevelRooms[i].z + ", thus " + i);
+                    GameManager.currentBoard = i;
+                    break;
+                }
+            }
             paddleMove.currentYPos -= 10;
             paddleMove.baseYPos -= 10;
             paddleMove.maxFlipHeight -= 10;
@@ -216,12 +239,11 @@ public class BallMovement : MonoBehaviour {
         if (moveDir.y > 0) {
             currentSpeed -= gravityBallReduction * Time.deltaTime;
             if (currentSpeed <= 0.1f) {
-                currentSpeed = 0.1f;
                 moveDir.y = -1;
+                currentSpeed = 0.1f;
             }
-        } else if (moveDir.y < 0) {
+        } else if (moveDir.y < 0 && currentSpeed <= terminalFallSpeed) {
             currentSpeed += gravityBallReduction * Time.deltaTime;
-            currentSpeed = Mathf.Min(currentSpeed, terminalFallSpeed);
         }
     }
 
@@ -312,7 +334,7 @@ public class BallMovement : MonoBehaviour {
     private void CheckPaddleCollision() {
         bool inVerticalRange = transform.position.y < paddle.transform.position.y + 0.13f && transform.position.y > paddle.transform.position.y - 0.13f;
         bool inHorizontalRange = transform.position.x > paddle.transform.position.x - paddle.transform.localScale.x / 2.2f && transform.position.x < paddle.transform.position.x + paddle.transform.localScale.x / 2.2f;
-        Debug.Log("Between: " + (paddle.transform.position.x - paddle.transform.localScale.x / 2.2f) + " & " + paddle.transform.position.x + paddle.transform.localScale.x / 2.2f);
+        //Debug.Log("Between: " + (paddle.transform.position.x - paddle.transform.localScale.x / 2.2f) + " & " + paddle.transform.position.x + paddle.transform.localScale.x / 2.2f);
 
         if (inVerticalRange && inHorizontalRange && moveDir.y == -1) {
             //Debug.Log("Collided with: Paddle");
