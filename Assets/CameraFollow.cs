@@ -12,7 +12,7 @@ public class CameraFollow : MonoBehaviour
         Vector3 roomPos;
 
         // Main room: use its Y directly
-        if (Mathf.Approximately(rooms[boardIndex].z, 0f))
+        if (rooms[boardIndex].z == 0f)
         {
             roomPos = rooms[boardIndex];
         }
@@ -20,6 +20,7 @@ public class CameraFollow : MonoBehaviour
         {
             // Side room: use main room's Y
             int mainRoomIndex = FindAssociatedMainRoom(boardIndex);
+            Debug.Log("MainRoomIndex: " + mainRoomIndex);
             roomPos = rooms[boardIndex];
             roomPos.y = rooms[mainRoomIndex].y;
         }
@@ -37,11 +38,14 @@ public class CameraFollow : MonoBehaviour
 
     private int FindAssociatedMainRoom(int boardIndex)
     {
+        Debug.Log("Main Index is running");
         for (int i = boardIndex; i >= 0; i--)
         {
-            if (Mathf.Approximately(GameManager.currentLevelData.LevelRooms[i].z, 0f))
+            Debug.Log("Main Index: " + i);
+            if (GameManager.currentLevelData.LevelRooms[i].z == 0f)
+                Debug.Log("Main Index: Found it: " + i);
                 return i;
         }
-        return boardIndex;
+        return 15;
     }
 }

@@ -420,7 +420,8 @@ public class GameManager : MonoBehaviour {
         int centralIndex = -1;
         for (int i = currentBoard - 1; i >= 0; i--)
         {
-            if (currentLevelData.LevelRooms[i].z != 0)
+            Debug.Log("Returning to central board. Int i = " + i);
+            if (currentLevelData.LevelRooms[i].z == 0)
             {
                 centralIndex = i;
                 break;
