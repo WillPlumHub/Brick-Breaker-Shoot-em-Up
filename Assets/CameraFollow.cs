@@ -1,60 +1,54 @@
 ﻿using UnityEngine;
 
 public class CameraFollow : MonoBehaviour {
-    
+
     public float mod = -1.56f;
     public float movementSpeed = 10;
+    private float targetY; // Track target Y separately
 
     void LateUpdate() {
         var levelLayers = GameManager.levelLayers;
         var LevelRooms = GameManager.currentLevelData.LevelRooms;
-        int boardIndex = GameManager.currentBoard;
+        int currentBoard = GameManager.currentBoard;
 
-        Vector3 roomPos;
-
-        // Main room: use its Y directly
-        if (LevelRooms[boardIndex].z == 0f)
-        {
-            roomPos = levelLayers[boardIndex].transform.position;
-            Debug.Log("1 RoomPos.y: " + roomPos.y);
-            Debug.Log("boardIndex: " + boardIndex);
-        }
-        else
-        {
-            // Side room: use main room's Y
-            int mainRoomIndex = FindAssociatedMainRoom(boardIndex);
-            Debug.Log("MainRoomIndex: " + mainRoomIndex);
-            Debug.Log("boardIndex: " + boardIndex);
-            roomPos = levelLayers[boardIndex].transform.position;
-            roomPos.y = LevelRooms[mainRoomIndex].y;
-            Debug.Log("2 RoomPos.y: " + roomPos.y);
+        // Find the appropriate Y position based on room type
+        if (LevelRooms[currentBoard].z == 0f) { // Main room 
+            targetY = levelLayers[currentBoard].transform.position.y;
+            Debug.Log("Main room Y: " + targetY);
+        } else { // Side room
+            int mainRoomIndex = FindAssociatedMainRoom(currentBoard);
+            targetY = levelLayers[mainRoomIndex].transform.position.y;
+            Debug.Log($"Side room {currentBoard} using main room {mainRoomIndex} Y: {targetY}");
         }
 
-        // Horizontal offset based on column
-        if (GameManager.currentColumn == 0) mod = 0f;
-        else if (GameManager.currentColumn == 1) mod = -1.56f;
-        else if (GameManager.currentColumn == -1) mod = 1.56f;
-
+        // Calculate horizontal position
+        CalculateHorizontalOffset();
         float targetX = mod + (GameManager.currentColumn * 25.10178f);
 
-        // Snap directly to calculated target
-        //transform.position = new Vector3(targetX, roomPos.y, transform.position.z);
-        Vector3 target = new Vector3(targetX, roomPos.y, transform.position.z);
+        // Smooth movement to target position
+        Vector3 target = new Vector3(targetX, targetY + 0.5f, transform.position.z);
         transform.position = Vector3.MoveTowards(transform.position, target, movementSpeed * Time.deltaTime);
     }
 
-    private int FindAssociatedMainRoom(int boardIndex)
-    {
-        Debug.Log("Main Index is running");
-        for (int i = boardIndex; i >= 0; i--)
-        {
-            Debug.Log("Main Index: " + i);
-            if (GameManager.currentLevelData.LevelRooms[i].z == 0f)
-            {
-                Debug.Log("Main Index: Found it: " + i);
-                return i;
-            }
+    void CalculateHorizontalOffset() {
+        switch (GameManager.currentColumn) {
+            case 0: mod = 0f; break;
+            case 1: mod = -1.56f; break;
+            case -1: mod = 1.56f; break;
         }
-        return boardIndex;
+    }
+
+    private int FindAssociatedMainRoom(int currentBoard) {
+        // Search downward for nearest main room
+        for (int i = currentBoard; i >= 0; i--) {
+            if (GameManager.currentLevelData.LevelRooms[i].z == 0f)
+                return i;
+        }
+        // Search upward if not found below
+        for (int i = currentBoard; i < GameManager.currentLevelData.LevelRooms.Count; i++) {
+            if (GameManager.currentLevelData.LevelRooms[i].z == 0f)
+                return i;
+        }
+        return currentBoard; // Fallback
     }
 }
