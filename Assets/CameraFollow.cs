@@ -14,11 +14,11 @@ public class CameraFollow : MonoBehaviour {
         // Find the appropriate Y position based on room type
         if (LevelRooms[currentBoard].z == 0f) { // Main room 
             targetY = levelLayers[currentBoard].transform.position.y;
-            Debug.Log("Main room Y: " + targetY);
+            //Debug.Log("Main room Y: " + targetY);
         } else { // Side room
             int mainRoomIndex = FindAssociatedMainRoom(currentBoard);
             targetY = levelLayers[mainRoomIndex].transform.position.y;
-            Debug.Log($"Side room {currentBoard} using main room {mainRoomIndex} Y: {targetY}");
+            //Debug.Log($"Side room {currentBoard} using main room {mainRoomIndex} Y: {targetY}");
         }
 
         // Calculate horizontal position

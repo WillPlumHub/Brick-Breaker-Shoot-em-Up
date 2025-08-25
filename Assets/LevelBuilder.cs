@@ -29,15 +29,15 @@ public class LevelBuilder : MonoBehaviour {
             if (!foundZ0 && currentZ == 0f) {
                 finalBoards.Add(i);
                 foundZ0 = true;
-                Debug.Log($"[INITIAL] Added main room (z=0) at index {i}");
+                //Debug.Log($"[INITIAL] Added main room (z=0) at index {i}");
             } else if (!foundZ1 && (int)currentZ == 1f) {
                 finalBoards.Add(i);
                 foundZ1 = true;
-                Debug.Log($"[INITIAL] Added right side room (z=1) at index {i}");
+                //Debug.Log($"[INITIAL] Added right side room (z=1) at index {i}");
             } else if (!foundZMinus1 && (int)currentZ == -1f) {
                 finalBoards.Add(i);
                 foundZMinus1 = true;
-                Debug.Log($"[INITIAL] Added left side room (z=-1) at index {i}");
+                //Debug.Log($"[INITIAL] Added left side room (z=-1) at index {i}");
             }
             // Early exit if we've found all three
             if (foundZ0 && foundZ1 && foundZMinus1) {
@@ -63,7 +63,7 @@ public class LevelBuilder : MonoBehaviour {
             // Only care about z == 1 or z == -1
             if (zValue == 1 || zValue == -1) {
                 string side = zValue == 1 ? "Right Side Room" : "Left Side Room";
-                Debug.Log($"[{zValue} ROOF CHECK] Found {side} at index {i}");
+                //Debug.Log($"[{zValue} ROOF CHECK] Found {side} at index {i}");
 
                 int zeroCount = 0;
                 int nextSameZIndex = -1;
@@ -73,14 +73,14 @@ public class LevelBuilder : MonoBehaviour {
                     int currentZ = (int)boardStats.LevelRooms[j].z;
 
                     if (currentZ == 0) {
-                        Debug.Log($"[{zValue} ROOF CHECK]   Found Main Side Room at index {j}, adding to zeroCount: {zeroCount + 1}");
+                        //Debug.Log($"[{zValue} ROOF CHECK]   Found Main Side Room at index {j}, adding to zeroCount: {zeroCount + 1}");
                         zeroCount++;
                     } else if (currentZ == zValue) {
-                        Debug.Log($"[{zValue} ROOF CHECK]   Found another {side} at index {j} from {i}");
+                        //Debug.Log($"[{zValue} ROOF CHECK]   Found another {side} at index {j} from {i}");
 
                         if (zeroCount >= 2 && !finalBoards.Contains(i)) {
                             finalBoards.Add(i);
-                            Debug.Log($"[{zValue} ROOF CHECK] Added index {i} (zeros between: {zeroCount}, next same z at {j})");
+                            //Debug.Log($"[{zValue} ROOF CHECK] Added index {i} (zeros between: {zeroCount}, next same z at {j})");
                         }
                         nextSameZIndex = j;
                         break;

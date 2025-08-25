@@ -59,14 +59,6 @@ public class BallMovement : MonoBehaviour {
     }
 
     private void Update() {
-
-        Debug.Log("CURRENT: boardCount: " + GameManager.levelLayers.Count);
-        
-        //Debug.Log("Ball position: " + transform.position);
-        //Debug.Log("Resetting because: " + transform.position + ", passed: " + (GameManager.currentLevelData.LevelRooms[GameManager.currentBoard].x));
-        if (transform.position.x >= 8.3f) {
-            Debug.Log("Hit boundry");
-        }
         bool grabPaddle = paddle.GetComponent<PaddleMove>().grabPaddle;
         boardTransition();
         if (isStuckToPaddle && paddle.GetComponent<PaddleMove>().anyBallStuck) {
@@ -82,14 +74,12 @@ public class BallMovement : MonoBehaviour {
             if ((Input.GetMouseButtonDown(0) && stickTarget == paddle.transform)) {
                 ReleaseFromStick();
             }
-
             return;
         }
 
         if (GameManager.IsGameStart) {
             // If we haven't already set the stick target, set it to the paddle
-            if (stickTarget == null && paddle != null)
-            {
+            if (stickTarget == null && paddle != null) {
                 stickTarget = paddle.transform;
                 stickOffsetX = 0f;
                 stickOffsetY = offset;
@@ -159,19 +149,16 @@ public class BallMovement : MonoBehaviour {
         // Try to move DOWN a board
         if (transform.position.y < paddleMove.baseYPos - 1.1f && GameManager.currentBoard > 0 && !GameManager.isShiftingDown) {
             Debug.Log("GOING DOWN: BallMovement for loop activated");
-            
             int currentZ = (int)GameManager.levelLayers[GameManager.currentBoard].GetComponent<LocalRoomData>().localLevelData.z;
-            //int currentZ = (int)GameManager.currentLevelData.LevelRooms[GameManager.currentBoard].z;
 
             for (int i = GameManager.currentBoard - 1; i >= 0; i--) {
-                Vector4 targetZ = GameManager.levelLayers[i].GetComponent<LocalRoomData>().localLevelData;
-                //int targetZ = (int)GameManager.currentLevelData.LevelRooms[i].z;
-
-                if ((int)targetZ.z == currentZ) {
-                    Debug.Log("GOING DOWN: Found next room: " + GameManager.currentBoard + " to " + i + ".   " + currentZ + ", " + (int)targetZ.z);
+                Vector4 target = GameManager.levelLayers[i].GetComponent<LocalRoomData>().localLevelData;
+                
+                if ((int)target.z == currentZ) {
+                    Debug.Log("GOING DOWN: Found next room: " + GameManager.currentBoard + " to " + i + ".   " + currentZ + ", " + (int)target.z);
                     
                     if (currentZ == 0) { // If Main Room
-                        Debug.Log($"GOING DOWN: Moving from board {GameManager.currentBoard} (z={currentZ}) to {i} (z={(int)targetZ.z})");
+                        Debug.Log($"GOING DOWN: Moving from board {GameManager.currentBoard} (z={currentZ}) to {i} (z={(int)target.z})");
                         GameManager.currentBoard = i;
                         // Adjust paddle positions
                         paddleMove.currentYPos -= 10;
@@ -179,34 +166,27 @@ public class BallMovement : MonoBehaviour {
                         paddleMove.maxFlipHeight -= 10;
                         break;
                     } else { // If Side Room
-
-                        // Verify the main room connected to this side room has non-zero Y value
+                        // Check if the main room connected to this side room's Y != 0
                         float mainRoomY = 0;
-                        bool mainRoom1Valid = (i - 1 >= 0) && GameManager.levelLayers[i - 1].GetComponent<LocalRoomData>().localLevelData.z == 0 && GameManager.levelLayers[i - 1].GetComponent<LocalRoomData>().localLevelData.y != 0f;
-                        if (mainRoom1Valid) {
+                        bool mainRoom1 = (i - 1 >= 0) && GameManager.levelLayers[i - 1].GetComponent<LocalRoomData>().localLevelData.z == 0 && GameManager.levelLayers[i - 1].GetComponent<LocalRoomData>().localLevelData.y != 0f;
+                        if (mainRoom1) {
                             mainRoomY = GameManager.levelLayers[i - 1].GetComponent<LocalRoomData>().localLevelData.y;
                         }
-                        //bool mainRoom1Valid = (i - 1 >= 0) && GameManager.currentLevelData.LevelRooms[i - 1].z == 0 && GameManager.currentLevelData.LevelRooms[i - 1].y != 0f;
-                        // Check if room i-2 exists and is a main room with non-zero Y
                         bool mainRoom2Valid = (i - 2 >= 0) && GameManager.levelLayers[i - 2].GetComponent<LocalRoomData>().localLevelData.z == 0 && GameManager.levelLayers[i - 2].GetComponent<LocalRoomData>().localLevelData.y != 0f;
                         if (mainRoom2Valid) {
                             mainRoomY = GameManager.levelLayers[i - 2].GetComponent<LocalRoomData>().localLevelData.y;
                         }
-                        //bool mainRoom2Valid = (i - 2 >= 0) && GameManager.currentLevelData.LevelRooms[i - 2].z == 0 && GameManager.currentLevelData.LevelRooms[i - 2].y != 0f;
 
-                        // If EITHER main room below has non-zero Y, skip this side room
-                        if (mainRoom1Valid || mainRoom2Valid) {
-                            Debug.Log("GOING DOWN: Skipping side room - connected main room has invalid Y position (!0). targetZ.y: " + targetZ.y + ", mainRoomY: " + mainRoomY);
-                            //continue; // Skip this side room and continue searching
-                            if (targetZ.y != mainRoomY) {
+                        // If the main room's Y != 0, skip this side room
+                        if (mainRoom1 || mainRoom2Valid) {
+                            Debug.Log("GOING DOWN: Skipping side room - connected main room has invalid Y position (!0). targetZ.y: " + target.y + ", mainRoomY: " + mainRoomY);
+                            if (target.y != mainRoomY) {
                                 continue;
                             }
                         }
-
-                        Debug.Log("GOING DOWN: Side Room: " + GameManager.currentBoard + " to " + i + ".   " + currentZ + ", " + (int)targetZ.z);
-                        
-                        int zeroCount = 0;
+                        Debug.Log("GOING DOWN: Side Room: " + GameManager.currentBoard + " to " + i + ".   " + currentZ + ", " + (int)target.z);
                         // To Target Room, counting every main room along the way
+                        int zeroCount = 0;
                         for (int j = GameManager.currentBoard; j >= i; j--) {
                             Debug.Log("GOING DOWN: loop " + j + " to " + i);
                             if ((int)GameManager.levelLayers[j].GetComponent<LocalRoomData>().localLevelData.z == 0) {
@@ -219,11 +199,21 @@ public class BallMovement : MonoBehaviour {
                         if (zeroCount >= 2) { // If new Side Room isn't connected vertically (more than 2 main rooms between)
                             Debug.Log("GOING DOWN: Side Room gap. Current Board was: " + GameManager.currentBoard + ", lastMainBoard: " + GameManager.lastMainBoard);
                             Debug.Log("Last Main board: " + GameManager.lastMainBoard + ", Current Board pretrans: " + GameManager.currentBoard);
-                            //GameManager.currentBoard = GameManager.lastMainBoard;                                                                     // Dying in a side room should send you to the most recent side room
-                            Debug.Log("Last Main board: " + GameManager.lastMainBoard + ", Current Board pretrans: " + GameManager.currentBoard);
-                            Destroy(gameObject);
+                            //int enabledBallCount = GameManager.ActiveBalls.Count(ball => ball != null && ball.gameObject != null && ball.gameObject.activeInHierarchy);
+                            // Or using a foreach approach:
+                            int count = 0;
+                            foreach (var ball in GameManager.ActiveBalls) {
+                                if (ball != null && ball.gameObject != null && ball.gameObject.activeInHierarchy) {
+                                    count++;
+                                }
+                            }
+                            if (count >= 2) {
+                                gameObject.SetActive(false);
+                            } else {
+                                GameManager.Instance.RemoveAndReturnToMostRecentCentralRoom();
+                            }
                         } else {
-                            Debug.Log($"GOING DOWN: Moving from board {GameManager.currentBoard} (z={currentZ}) to {i} (z={(int)targetZ.z}), zeros in between: {zeroCount}");
+                            Debug.Log($"GOING DOWN: Moving from board {GameManager.currentBoard} (z={currentZ}) to {i} (z={(int)target.z}), zeros in between: {zeroCount}");
                             GameManager.currentBoard = i; // Valid move, update Current Board
                             paddleMove.currentYPos -= 10;
                             paddleMove.baseYPos -= 10;
@@ -243,7 +233,7 @@ public class BallMovement : MonoBehaviour {
         }
         
         float offset = GameManager.levelLayers[currentBoard].GetComponent<LocalRoomData>().localLevelData.x;
-        Debug.Log("[CCCCCCCCC] Restting because: " + ((offset + 8.3f) + (24.26f * GameManager.currentColumn)) + ", and " + ((-offset - 8.3f) + (24.26f * GameManager.currentColumn)));
+        //Debug.Log("[CCCCCCCCC] Restting because: " + ((offset + 8.3f) + (24.26f * GameManager.currentColumn)) + ", and " + ((-offset - 8.3f) + (24.26f * GameManager.currentColumn)));
         // If outside of current board's left & right walls, reset back to center
         if ((transform.position.x >= ((offset + 8.3f) + (24.26f * GameManager.currentColumn))
             || transform.position.x <= ((-offset - 8.3f) + (24.26f * GameManager.currentColumn))) && !GameManager.ceilinigDestroyed) {
@@ -424,7 +414,23 @@ public class BallMovement : MonoBehaviour {
         float angle = Vector2.Angle(normal, Vector2.up);
 
         if (collision.gameObject.name.EndsWith("Roof") && transform.position.y > collision.transform.position.y) { // Change "Roof" to whatever object destroys balls
-            Destroy(gameObject);
+            //Destroy(gameObject);
+            int count = 0;
+            foreach (var ball in GameManager.ActiveBalls)
+            {
+                if (ball != null && ball.gameObject != null && ball.gameObject.activeInHierarchy)
+                {
+                    count++;
+                }
+            }
+            if (count >= 2)
+            {
+                gameObject.SetActive(false);
+            }
+            else
+            {
+                GameManager.Instance.RemoveAndReturnToMostRecentCentralRoom();
+            }
         }
 
         if (collision.gameObject.CompareTag("Block") || collision.gameObject.CompareTag("Brick")) {
@@ -435,10 +441,12 @@ public class BallMovement : MonoBehaviour {
             HandleBouncePhysics(angle, collision.gameObject);
         }
 
-        StartCoroutine(ResetCollisionFlag());
+        if (gameObject.activeInHierarchy) {
+            StartCoroutine(ResetCollisionFlag());
+        }
     }
 
-    public void ResetToCentralRoom()
+    public void ResetToCentralRoom() // Not used apparently???
     {
         // Set ball to center of the central room
         transform.position = Vector3.zero;

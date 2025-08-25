@@ -329,6 +329,14 @@ PrefabInstance:
       propertyPath: PaddleSizeMod
       value: 1.5
       objectReference: {fileID: 0}
+    - target: {fileID: 341357414363496314, guid: 9997699c696daa54db99fea46c8920b6, type: 3}
+      propertyPath: powerUps.Array.size
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 341357414363496314, guid: 9997699c696daa54db99fea46c8920b6, type: 3}
+      propertyPath: powerUps.Array.data[0]
+      value: 
+      objectReference: {fileID: 11400000, guid: 10be4e7b8b1b60c4dbb7d1a30be99a2c, type: 2}
     - target: {fileID: 4937210310209571990, guid: 9997699c696daa54db99fea46c8920b6, type: 3}
       propertyPath: m_LocalPosition.x
       value: -4.158475
@@ -371,6 +379,10 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6590309543092490936, guid: 9997699c696daa54db99fea46c8920b6, type: 3}
       propertyPath: m_Volume
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7422795820194772402, guid: 9997699c696daa54db99fea46c8920b6, type: 3}
+      propertyPath: m_Enabled
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8526017153164574146, guid: 9997699c696daa54db99fea46c8920b6, type: 3}

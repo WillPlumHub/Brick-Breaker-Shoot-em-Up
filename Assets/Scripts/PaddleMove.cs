@@ -244,8 +244,7 @@ public class PaddleMove : MonoBehaviour {
                 // Apply the final boundary calculation
                 XBoundry = baseHalfWidth * modf - 0.2f;
 
-                Debug.Log($"[Paddle XBoundry] Room X Offset: {roomXOffset}, Wall Positions: L={leftWall.position.x}, R={rightWall.position.x}, " +
-                         $"Half Distance: {halfDistance}, Mod: {modf}, XBoundry: {XBoundry}");
+                //Debug.Log($"[Paddle XBoundry] Room X Offset: {roomXOffset}, Wall Positions: L={leftWall.position.x}, R={rightWall.position.x}, " + $"Half Distance: {halfDistance}, Mod: {modf}, XBoundry: {XBoundry}");
             } else {
                 Debug.LogWarning("[Paddle XBoundry] Could not find walls in current level layer.");
             }
