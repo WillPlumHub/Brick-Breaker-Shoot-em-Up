@@ -1,9 +1,12 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UIElements;
+using static UnityEngine.Rendering.VirtualTexturing.Debugging;
 
 
 public class GameManager : MonoBehaviour {
@@ -43,6 +46,8 @@ public class GameManager : MonoBehaviour {
     [Header("Level")]
     public static List<GameObject> levelLayers;
     public List<GameObject> LevelLayers;
+    public static Stack<int> RoomHistory;
+    public Stack<int> roomHistory;
     private bool isRemovingBoard = false;
     public static int numberOfBoards;
     public int boardAmount = 1;
@@ -102,8 +107,7 @@ public class GameManager : MonoBehaviour {
                 Debug.LogWarning("No LevelData (boardStats) assigned in LevelBuilder.");
             }
         }
-
-
+                
         numberOfBoards = GameObject.Find("LevelManager").GetComponent<LevelBuilder>().boardStats.LevelRooms.Count;
         //Debug.Log("NumBoards: " + GameObject.Find("LevelManager").GetComponent<LevelBuilder>().boardStats.LevelRooms.Count);
         HandleSingleton();
@@ -112,6 +116,8 @@ public class GameManager : MonoBehaviour {
 
         RebuildLevelLayers(); // Replaces manual object scan
         boardAmount = levelLayers.Count;
+
+        
     }
 
     private void OnEnable() {
@@ -143,6 +149,14 @@ public class GameManager : MonoBehaviour {
     private void Start() {
         ceilinigDestroyed = false;
         InitializeGame();
+        if (RoomHistory == null) {
+            RoomHistory = new Stack<int>();
+        }
+
+        RoomHistory.Push(0);
+        //Debug.Log("[Room History] First addition: " + RoomHistory);
+        int[] historyArray = RoomHistory.ToArray();
+        Debug.Log($"  [{0}]: Room {historyArray[0]}");
     }
 
     private void Update() {
@@ -166,10 +180,34 @@ public class GameManager : MonoBehaviour {
             scoreMult = 1;
             scoreMultTimer = 10;
         }
+
+        if (DebugMode) {
+            Debug.Log("DebugDisabling Score Saving");
+        }
+
+        if (Input.GetKeyDown(KeyCode.Escape)) {
+            PrintRoomHistory();
+        }
     }
 
 
+    // Method to print all entries in the RoomHistory stack
+    public static void PrintRoomHistory() {
+        if (RoomHistory == null) {
+            Debug.Log("RoomHistory is null");
+            return;
+        }
+        if (RoomHistory.Count == 0) {
+            Debug.Log("RoomHistory is empty");
+            return;
+        }
 
+        // Convert stack to array to preserve order for printing
+        int[] historyArray = RoomHistory.ToArray();
+        for (int i = historyArray.Length - 1; i >= 0; i--) {
+            Debug.Log($"  [{i}]: Room {historyArray[i]}");
+        }
+    }
 
 
     public void transitionCheck() {
@@ -249,7 +287,7 @@ public class GameManager : MonoBehaviour {
         } 
 
         float moveDistance = 0f;
-        if (referenceTransform != null) {
+        if (referenceTransform != null && currentColumn == 0) { // Roof out of range scroll
             if (currentLevelData != null && currentLevelData.LevelRooms.Count > currentBoard) {
                 // Expected roof Y for this board, using base formula + vertical offset
                 float expectedRoofY = -4.5f + (10f * (currentBoard + 1f)) + currentLevelData.LevelRooms[currentBoard].y;
@@ -447,39 +485,53 @@ public class GameManager : MonoBehaviour {
     public void RemoveAndReturnToMostRecentCentralRoom() {
         if (currentBoard < 0 || currentBoard >= levelLayers.Count) return;
 
-        // FIXED: Use Transform instead of GameObject for GetComponentsInChildren
-        Transform currentSideRoomXTrans = levelLayers[currentBoard].GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name.StartsWith("XTransition"));
+        isShiftingDown = true;
+
+        Transform currentSideRoomXTrans = null;
+
+        int mainRoomIndex = RoomHistory.ToArray()[RoomHistory.Count - 1];
+        Debug.Log("Room to go to: " + mainRoomIndex);
+
+        if (RoomHistory.Count > 1) {
+            // Convert stack to array to access elements by index (bottom is at index 0)
+            int[] roomArray = RoomHistory.ToArray();
+            int secondFromBottomIndex = roomArray[RoomHistory.Count - 2]; // Second from bottom
+            Debug.Log("Second from bottom index: " + secondFromBottomIndex);
+            if (secondFromBottomIndex >= 0 && secondFromBottomIndex < levelLayers.Count) { // Get reference to the main room's Xtransition object
+                currentSideRoomXTrans = levelLayers[secondFromBottomIndex].GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name.StartsWith("XTransition"));
+            }
+        }
 
         if (currentSideRoomXTrans == null) {
-            Debug.LogError("No XTransition found in current side room!");
+            Debug.LogWarning("No XTransition found in current side room!");
             return;
         }
 
         GameObject mainRoomXTrans = currentSideRoomXTrans.GetComponent<XTransition>().partnerTransition;
+        Debug.Log("Main room XTrans: " + mainRoomXTrans);
 
-        // Remove current side room
-        GameObject removedLayer = levelLayers[currentBoard];
-        levelLayers.RemoveAt(currentBoard);
-        Destroy(removedLayer);
-        numberOfBoards--;
+        // Pop from RoomHistory until only 1 remains
+        while (RoomHistory.Count > 1) {
+            int index = RoomHistory.Pop();
+            Debug.Log("Room History index to remove: " + index);
 
-        // Search backward for the most recent central board (z != 0)
-        int mainRoomIndex = -1;
-        for (int i = currentBoard - 1; i >= 0; i--) {
-            Debug.Log("Returning to central board. Int i = " + i);
-            if (currentLevelData.LevelRooms[i].z == 0) {
-                mainRoomIndex = i;
-                break;
+            if (index >= 0 && index < levelLayers.Count) {
+                GameObject removedLayer = levelLayers[index];
+                levelLayers.RemoveAt(index);
+                Destroy(removedLayer);
+                numberOfBoards--;
             }
         }
-
+                
         // If found, set currentBoard to that index; otherwise fallback to first board
         if (mainRoomIndex >= 0) {
+            Debug.Log("Room to go to: " + mainRoomIndex);
             currentBoard = mainRoomIndex;
             if (mainRoomXTrans != null) {
                 Destroy(mainRoomXTrans);
             }
         } else {
+            Debug.Log("Room to go to: 0");
             currentBoard = 0;
         }
 
@@ -488,9 +540,10 @@ public class GameManager : MonoBehaviour {
         // Reset ball positions
         int ballCount = ActiveBalls.Count(ball => ball != null && ball.gameObject != null);
         float radius = 1.0f;
-
+        Debug.Log("There are " + ballCount + " balls to relocate in a circle of radius: " + radius);
         for (int i = 0; i < ballCount; i++) {
             var ball = ActiveBalls[i];
+            Debug.Log("Current ball: " + ball);
             if (ball != null && ball.gameObject != null) {
                 // Calculate circular position
                 float angleDeg = i * (360f / ballCount);
@@ -503,26 +556,34 @@ public class GameManager : MonoBehaviour {
                 BallMovement ballMovement = ball.GetComponent<BallMovement>();
                 if (ballMovement != null) {
                     ballMovement.currentSpeed = 0.1f; // Set direction outward from center or upward
-                    ballMovement.moveDir = new Vector2(offset.x, offset.y).normalized; // Alternative: keep original upward direction
+                    ballMovement.moveDir = new Vector2(offset.x, offset.y).normalized;
                 }
 
                 if (!ball.gameObject.activeSelf) {
+                    Debug.Log("This ball isn't active");
                     ball.gameObject.SetActive(true);
+                    Debug.Log("This ball is active");
                 }
             }
         }
         // Reset brick container for the new board
+        Debug.Log("Resetting brickContainer");
         brickContainer = null;
         CountBricks();
+        StartCoroutine(ResetShiftingDownNextFrame());
     }
 
+    private IEnumerator ResetShiftingDownNextFrame() {
+        yield return 10; // wait 1 frame
+        isShiftingDown = false;
+    }
 
 
 
 
     #region PowerUps
     public void expandPaddle() {
-        GameObject paddle = GameObject.Find("Paddle");        
+        GameObject paddle = GameObject.Find("Paddle");
         Vector3 scale = paddle.transform.localScale;
         if (scale.x < 18.4f) {
             paddle.GetComponent<PaddleMove>().magnetOffset *= 1.2f;
@@ -569,7 +630,7 @@ public class GameManager : MonoBehaviour {
 
         int strikes = Mathf.Min(3, availableBricks.Count);
         for (int x = 0; x < strikes; x++) {
-            int index = Random.Range(0, availableBricks.Count);
+            int index = UnityEngine.Random.Range(0, availableBricks.Count);
             if (availableBricks[index].GetComponent<ObjHealth>() != null) {
                 // Lightning Strike animation
                 availableBricks[index].GetComponent<ObjHealth>().TakeDamage((int)availableBricks[index].GetComponent<ObjHealth>().health, 1, 0);
@@ -651,7 +712,7 @@ public class GameManager : MonoBehaviour {
                 }
             }
         }
-        float direction = grabbed ? Random.Range(-1f, 1f) : 1f;
+        float direction = grabbed ? UnityEngine.Random.Range(-1f, 1f) : 1f;
         GameObject newBall = Instantiate(ballPrefab, new Vector2(GameManager.ActiveBalls[0].transform.position.x + 0.5f, GameManager.ActiveBalls[0].transform.position.y), Quaternion.identity);
         newBall.GetComponent<BallMovement>().isStuckToPaddle = false;
         newBall.GetComponent<BallMovement>().InitializeBall(new Vector2(direction, 1));
@@ -680,7 +741,7 @@ public class GameManager : MonoBehaviour {
             float angleRad = angleDeg * Mathf.Deg2Rad;
             Vector2 offset = new Vector2(Mathf.Cos(angleRad), Mathf.Sin(angleRad));
             Vector2 spawnPos = centerPos + offset;
-            Vector2 direction = grabbed ? new Vector2(Random.Range(-1f, 1f), 1f).normalized : offset.normalized;
+            Vector2 direction = grabbed ? new Vector2(UnityEngine.Random.Range(-1f, 1f), 1f).normalized : offset.normalized;
             GameObject newBall;
             if (i == 0) { // Use the original ball
                 newBall = ActiveBalls[0];
@@ -813,6 +874,7 @@ public class GameManager : MonoBehaviour {
         shiftingDown = isShiftingDown;
         currentcolumn = currentColumn;
         lastmainmoard = lastMainBoard;
+        roomHistory = RoomHistory;
     }
 
     public void debugOptions() {
@@ -887,7 +949,7 @@ public class GameManager : MonoBehaviour {
             Debug.Log("Paddle super shrunk");
         }
 
-        if (Input.GetKeyDown(KeyCode.V)) {
+        /*if (Input.GetKeyDown(KeyCode.V)) {
             // Spawn random power-up at paddle position
             GameObject paddle = GameObject.Find("Paddle");
             if (paddle != null) {
@@ -895,7 +957,7 @@ public class GameManager : MonoBehaviour {
                 PowerUpSpawn(randomOdds, new Vector3(paddle.transform.position.x, paddle.transform.position.y + 5f, 0f));
                 Debug.Log("Spawned random power-up above paddle");
             }
-        }
+        }*/
 
         // Game Flow Debugging
         if (Input.GetKeyDown(KeyCode.G)) {
@@ -911,27 +973,93 @@ public class GameManager : MonoBehaviour {
             }
         }
 
-        /*if (Input.GetKeyDown(KeyCode.Y)) {
-            XTransition xTransition = levelLayers[currentBoard].GetComponentInChildren<XTransition>(true);
-            if (xTransition.transition == -1 && xTransition != null) {
-                Debug.Log("[XTRANSITION] Starting side room transition...");
-                StartCoroutine(xTransition.DoTransition());
-                Debug.Log("[XTRANSITION] Transition complete.");
+        if (Input.GetKeyDown(KeyCode.Y)) {
+            XTransition[] xTransitions = levelLayers[currentBoard].GetComponentsInChildren<XTransition>(true);
+            if (xTransitions.Length == 0) {
+                Debug.LogWarning("No XTransition components found in current room");
+                return;
+            }
+
+            XTransition leftTransition = null;
+            foreach (XTransition xTransition in xTransitions) {
+                if (currentColumn == 0) {
+                    if (xTransition != null && xTransition.transition == -1) {
+                        leftTransition = xTransition;
+                        break;
+                    }
+                } else if (currentColumn == 1) {
+                    if (xTransition != null && xTransition.transition == 0) {
+                        leftTransition = xTransition;
+                        break;
+                    }
+                }
+            }
+
+            if (leftTransition != null) {
+                Debug.Log("[XTRANSITION] Starting Left Hand Side Room transition...");
+                ActiveBalls[0].transform.position = leftTransition.transform.position;
             } else {
-                Debug.LogWarning("SIDE RESET: XTransition component not found in current side room");
+                Debug.LogWarning("No XTransition with transition value -1 found in current room");
             }
         }
 
         if (Input.GetKeyDown(KeyCode.U)) {
-            XTransition xTransition = levelLayers[currentBoard].GetComponentInChildren<XTransition>(true);
-            if (xTransition.transition == 1 && xTransition != null) {
-                Debug.Log("[XTRANSITION] Starting side room transition...");
-                StartCoroutine(xTransition.DoTransition());
-                Debug.Log("[XTRANSITION] Transition complete.");
-            } else {
-                Debug.LogWarning("SIDE RESET: XTransition component not found in current side room");
+            XTransition[] xTransitions = levelLayers[currentBoard].GetComponentsInChildren<XTransition>(true);
+            if (xTransitions.Length == 0) {
+                Debug.LogWarning("No XTransition components found in current room");
+                return;
             }
-        }*/
+
+            XTransition rightTransition = null;
+            foreach (XTransition xTransition in xTransitions) {
+                if (currentColumn == 0) {
+                    if (xTransition != null && xTransition.transition == 1) {
+                        rightTransition = xTransition;
+                        break;
+                    }
+                } else if (currentColumn == -1) {
+                    if (xTransition != null && xTransition.transition == 0) {
+                        rightTransition = xTransition;
+                        break;
+                    }
+                }
+            }
+
+            if (rightTransition != null) {
+                Debug.Log("[XTRANSITION] Starting Left Hand Side Room transition...");
+                ActiveBalls[0].transform.position = rightTransition.transform.position;
+            } else {
+                Debug.LogWarning("No XTransition with transition value -1 found in current room");
+            }
+        }
+
+        if (Input.GetKeyDown(KeyCode.J) && currentBoard < levelLayers.Count - 1) {
+            if (currentColumn == 0) {
+                PaddleMove paddleMove = GameObject.Find("Paddle").GetComponent<PaddleMove>();
+                ActiveBalls[0].transform.position = new Vector3(ActiveBalls[0].transform.position.x, paddleMove.baseYPos + 11f, 0f);
+            }
+        }
+
+        if (Input.GetKeyDown(KeyCode.K) && currentBoard > 0) {
+            if (currentColumn == 0) {
+                PaddleMove paddleMove = GameObject.Find("Paddle").GetComponent<PaddleMove>();
+                ActiveBalls[0].transform.position = new Vector3(ActiveBalls[0].transform.position.x, paddleMove.baseYPos - 2f, 0f);
+            }
+        }
+
+        // OPFTV Are left
+
+        // Number keys for power-up spawning
+        if (Input.GetKeyDown(KeyCode.Alpha1)) SpawnPowerUpByIndex(0);
+        if (Input.GetKeyDown(KeyCode.Alpha2)) SpawnPowerUpByIndex(1);
+        if (Input.GetKeyDown(KeyCode.Alpha3)) SpawnPowerUpByIndex(2);
+        if (Input.GetKeyDown(KeyCode.Alpha4)) SpawnPowerUpByIndex(3);
+        if (Input.GetKeyDown(KeyCode.Alpha5)) SpawnPowerUpByIndex(4);
+        if (Input.GetKeyDown(KeyCode.Alpha6)) SpawnPowerUpByIndex(5);
+        if (Input.GetKeyDown(KeyCode.Alpha7)) SpawnPowerUpByIndex(6);
+        if (Input.GetKeyDown(KeyCode.Alpha8)) SpawnPowerUpByIndex(7);
+        if (Input.GetKeyDown(KeyCode.Alpha9)) SpawnPowerUpByIndex(8);
+        if (Input.GetKeyDown(KeyCode.Alpha0)) SpawnPowerUpByIndex(9);
 
         // Information Display
         if (Input.GetKeyDown(KeyCode.I)) {
@@ -944,6 +1072,16 @@ public class GameManager : MonoBehaviour {
             Debug.Log($"Is Shifting Down: {isShiftingDown}");
             Debug.Log($"Current Column: {currentColumn}");
         }
+    }
+
+    private void SpawnPowerUpByIndex(int index) {
+        if (powerUps == null || index < 0 || index >= powerUps.Count || powerUps[index].prefab == null) {
+            Debug.LogWarning($"Cannot spawn power-up at index {index}");
+            return;
+        }
+        GameObject paddle = GameObject.Find("Paddle");
+        Instantiate(powerUps[index].prefab, new Vector3(paddle.transform.position.x, paddle.transform.position.y + 5f), Quaternion.identity);
+        Debug.Log($"Spawned {powerUps[index].itemName} at position {new Vector3(paddle.transform.position.x, paddle.transform.position.y + 5f)}");
     }
     #endregion
 }

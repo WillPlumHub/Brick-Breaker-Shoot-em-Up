@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 
 public class CameraFollow : MonoBehaviour {
 
@@ -8,16 +9,19 @@ public class CameraFollow : MonoBehaviour {
 
     void LateUpdate() {
         var levelLayers = GameManager.levelLayers;
-        var LevelRooms = GameManager.currentLevelData.LevelRooms;
         int currentBoard = GameManager.currentBoard;
+        GameObject paddle = GameObject.Find("Paddle");
 
         // Find the appropriate Y position based on room type
-        if (LevelRooms[currentBoard].z == 0f) { // Main room 
-            targetY = levelLayers[currentBoard].transform.position.y;
+        if (levelLayers[currentBoard].GetComponent<LocalRoomData>().localLevelData.z == 0f) { // Main room 
+            targetY = paddle.GetComponent<PaddleMove>().baseYPos + 4f;
+            //targetY = levelLayers[currentBoard].transform.position.y;
             //Debug.Log("Main room Y: " + targetY);
-        } else { // Side room
-            int mainRoomIndex = FindAssociatedMainRoom(currentBoard);
-            targetY = levelLayers[mainRoomIndex].transform.position.y;
+        }
+        else { // Side room
+            int mainRoomIndex = FindAssociatedMainRoom(levelLayers, currentBoard);
+            targetY = paddle.GetComponent<PaddleMove>().baseYPos + 4f;
+            //targetY = levelLayers[mainRoomIndex].transform.position.y;
             //Debug.Log($"Side room {currentBoard} using main room {mainRoomIndex} Y: {targetY}");
         }
 
@@ -38,15 +42,15 @@ public class CameraFollow : MonoBehaviour {
         }
     }
 
-    private int FindAssociatedMainRoom(int currentBoard) {
+    private int FindAssociatedMainRoom(List<GameObject> levelLayers, int currentBoard) {
         // Search downward for nearest main room
         for (int i = currentBoard; i >= 0; i--) {
-            if (GameManager.currentLevelData.LevelRooms[i].z == 0f)
+            if (levelLayers[i].GetComponent<LocalRoomData>().localLevelData.z == 0f)
                 return i;
         }
         // Search upward if not found below
-        for (int i = currentBoard; i < GameManager.currentLevelData.LevelRooms.Count; i++) {
-            if (GameManager.currentLevelData.LevelRooms[i].z == 0f)
+        for (int i = currentBoard; i < levelLayers.Count; i++) {
+            if (levelLayers[i].GetComponent<LocalRoomData>().localLevelData.z == 0f)
                 return i;
         }
         return currentBoard; // Fallback

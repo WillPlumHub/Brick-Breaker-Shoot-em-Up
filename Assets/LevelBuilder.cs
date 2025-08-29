@@ -50,10 +50,10 @@ public class LevelBuilder : MonoBehaviour {
         for (int i = 0; i < boardStats.LevelRooms.Count; i++) {
 
             if (boardStats.LevelRooms[i].z == 0f && boardStats.LevelRooms[i].y != 0f) { // Add roof if gap between board rows
-                if (i + 1 < boardStats.LevelRooms.Count && boardStats.LevelRooms[i + 1].z != 0f && boardStats.LevelRooms[i + 1].y != boardStats.LevelRooms[i].y && !finalBoards.Contains(i + 1)) {
+                if (i + 1 < boardStats.LevelRooms.Count && boardStats.LevelRooms[i + 1].z != 0f /*&& boardStats.LevelRooms[i + 1].y != boardStats.LevelRooms[i].y*/ && !finalBoards.Contains(i + 1)) {
                     finalBoards.Add(i + 1);
                 }
-                if (i + 2 < boardStats.LevelRooms.Count && boardStats.LevelRooms[i + 2].z != 0f && boardStats.LevelRooms[i + 2].y != boardStats.LevelRooms[i].y && !finalBoards.Contains(i + 2)) {
+                if (i + 2 < boardStats.LevelRooms.Count && boardStats.LevelRooms[i + 2].z != 0f /*&& boardStats.LevelRooms[i + 2].y != boardStats.LevelRooms[i].y*/ && !finalBoards.Contains(i + 2)) {
                     finalBoards.Add(i + 2);
                 }
             }
