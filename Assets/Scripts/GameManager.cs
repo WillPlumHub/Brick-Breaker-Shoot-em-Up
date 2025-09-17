@@ -6,8 +6,8 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
+using static UnityEngine.Rendering.DebugUI.Table;
 using static UnityEngine.Rendering.VirtualTexturing.Debugging;
-
 
 public class GameManager : MonoBehaviour {
 
@@ -20,9 +20,9 @@ public class GameManager : MonoBehaviour {
     public static int CurrentScore;
     public int targetScore = CurrentScore + 50;
     public static int scoreMult = 1;
-    public float scoreMultTimer = 10; 
+    public float scoreMultTimer = 10;
     public static bool ceilinigDestroyed = false;
-    
+
     [Header("Paddle")]
     public static float DisableTimer;
     public static float MagnetOffset;
@@ -36,37 +36,47 @@ public class GameManager : MonoBehaviour {
     [SerializeField] private List<GameObject> ballsInEditor; //_balls Debug
 
     [Header("Bricks")]
-    public GameObject brickcontainer; 
+    public static float brickLimit = 10;
+    public float BrickLimit = 10;
+    public GameObject brickcontainer; // Debug
     public static GameObject brickContainer;
-    
+
     public static int brickCount;
     public int initialBrickCount;
     public int publicBrickCount = 0; // Debug
 
     [Header("Level")]
-    public static List<GameObject> levelLayers;
-    public List<GameObject> LevelLayers;
-    public static Stack<int> RoomHistory;
-    public Stack<int> roomHistory;
-    private bool isRemovingBoard = false;
+    public Vector2 currentPosition;
+    public GameObject[,] LevelLayers; // Debug
+    public static GameObject[,] levelLayers;
+    public static Queue<Vector2> RoomHistory = new Queue<Vector2>();
+    public Queue<Vector2> roomHistory = new Queue<Vector2>(); // Debug
+    public static bool isRemovingBoard = false;
     public static int numberOfBoards;
-    public int boardAmount = 1;
-    public static int currentBoard = 0;
-    public int currentboard = 0;
-    public static int currentColumn = 0;
-    public int currentcolumn = 0;
+    public int boardAmount = 1; // Debug
+
+
+    public static int currentBoardRow = 0;
+    public static int currentBoardColumn = 1; // Track column (0=left, 1=main, 2=right)
     public static string nextScene;
     public string publicNextScene; // Debug
     public float blankTransitionTime;
-    public bool hasLoadedNextLevel;
+    public static bool hasLoadedNextLevel;
 
-    public float moveSpeed;
+    public static float roofScrollSpeedModifier = 1f; // Normal speed
+    public static float lastHorizontalTransitionTime = 0f;
+    public static bool needsFastRoofScroll = false;
+    public static float moveSpeed = 5f; // Your original move speed
+
     public static bool isShiftingDown = false;
-    public bool shiftingDown = false;
+    public bool shiftingDown = false; // Debug
+    public static Coroutine roofCoroutine;
+    public static bool isTransitioning = false;
+    public bool istransitioning = false; // Debug
 
     public static LevelData currentLevelData;
     public static int lastMainBoard;
-    public int lastmainmoard;
+    public int lastmainmoard; // Debug
 
 
     [Header("Power Ups")]
@@ -74,7 +84,6 @@ public class GameManager : MonoBehaviour {
     public bool fireBall = false;
     public bool superShrink = false;
     public bool gravityBall = false;
-    //public int paddleSizeMod = 0;
     public float PaddleSizeMod = 1;
     public static bool BrickThu = false;
     public static bool FireBall = false;
@@ -92,7 +101,7 @@ public class GameManager : MonoBehaviour {
 
     [Header("Debug")]
     public bool DebugMode = false;
-
+    public TMP_Text DebugInfo;
 
     #region Set up
     private void Awake() {
@@ -103,21 +112,16 @@ public class GameManager : MonoBehaviour {
             LevelBuilder levelBuilder = levelManagerObj.GetComponent<LevelBuilder>();
             if (levelBuilder == null) {
                 Debug.LogWarning("LevelBuilder component not found on LevelManager.");
-            } else if (levelBuilder.boardStats == null) {
-                Debug.LogWarning("No LevelData (boardStats) assigned in LevelBuilder.");
+            } else if (levelBuilder.levelData == null) {
+                Debug.LogWarning("No LevelData assigned in LevelBuilder.");
             }
         }
-                
-        numberOfBoards = GameObject.Find("LevelManager").GetComponent<LevelBuilder>().boardStats.LevelRooms.Count;
-        //Debug.Log("NumBoards: " + GameObject.Find("LevelManager").GetComponent<LevelBuilder>().boardStats.LevelRooms.Count);
+
         HandleSingleton();
         InitializeAudio();
         SceneManager.sceneLoaded += OnSceneLoaded;
 
-        RebuildLevelLayers(); // Replaces manual object scan
-        boardAmount = levelLayers.Count;
-
-        
+        boardAmount = 0; // Temporary until we rebuild
     }
 
     private void OnEnable() {
@@ -133,49 +137,82 @@ public class GameManager : MonoBehaviour {
     }
 
     public void RebuildLevelLayers() {
-        if (levelLayers == null) levelLayers = new List<GameObject>();
-        else levelLayers.Clear();
-
         LevelBuilder levelBuilder = GameObject.Find("LevelManager")?.GetComponent<LevelBuilder>();
+
         if (levelBuilder == null || levelBuilder.CreatedBoards == null) {
-            Debug.LogError("LevelBuilder or CreatedBoards is missing.");
+            Debug.LogError("LevelBuilder or CreatedBoards is missing");
             return;
         }
-        levelLayers = new List<GameObject>(levelBuilder.CreatedBoards);
-        //levelLayers.Sort((a, b) => a.transform.position.y.CompareTo(b.transform.position.y));
+        levelLayers = levelBuilder.CreatedBoards;
+        numberOfBoards = GetTotalBoardCount();
+    }
+
+    private int GetTotalBoardCount() {
+        if (levelLayers == null) return 0;
+        int count = 0;
+        for (int row = 0; row < levelLayers.GetLength(0); row++) {
+            for (int col = 0; col < levelLayers.GetLength(1); col++) {
+                if (levelLayers[row, col] != null) {
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    public static GameObject GetCurrentLayer() {
+        if (levelLayers == null || currentBoardRow < 0 || currentBoardRow >= levelLayers.GetLength(0) || currentBoardColumn < 0 || currentBoardColumn >= levelLayers.GetLength(1)) {
+            return null;
+        }
+        return levelLayers[currentBoardRow, currentBoardColumn];
+    }
+
+    public static GameObject GetLayer(int row, int column) {
+        if (levelLayers == null || row < 0 || row >= levelLayers.GetLength(0) || column < 0 || column >= levelLayers.GetLength(1)) {
+            return null;
+        }
+        return levelLayers[row, column];
     }
     #endregion
 
     private void Start() {
         ceilinigDestroyed = false;
         InitializeGame();
+
+        // Rebuild level layers NOW, after LevelBuilder has finished in Awake()
+        RebuildLevelLayers();
+        boardAmount = GetTotalBoardCount();
+
         if (RoomHistory == null) {
-            RoomHistory = new Stack<int>();
+            RoomHistory = new Queue<Vector2>();
         }
 
-        RoomHistory.Push(0);
-        //Debug.Log("[Room History] First addition: " + RoomHistory);
-        int[] historyArray = RoomHistory.ToArray();
+        RoomHistory.Enqueue(new Vector2(1, 0));
+        Vector2[] historyArray = RoomHistory.ToArray();
         Debug.Log($"  [{0}]: Room {historyArray[0]}");
     }
 
     private void Update() {
+
+        if (isTransitioning) {
+            Debug.Log("HRT!!!!!!!!!!");
+        }
         UpdateDebugValues();
         UpdateGameState();
         HandleScore();
         CheckGameState();
-        CountBricks();
         debugOptions();
 
         if (!isShiftingDown && !isRemovingBoard) {
             transitionCheck();
+            //CountBricks();
         }
 
         if (scoreMult != 1 && ActiveBalls.Count > 0 && !IsGameStart) {
             scoreMultTimer -= (1 * Time.deltaTime);
             //Debug.Log("x2 timer: " + timer);
         }
-        
+
         if (scoreMultTimer <= 0) {
             scoreMult = 1;
             scoreMultTimer = 10;
@@ -186,268 +223,424 @@ public class GameManager : MonoBehaviour {
         }
 
         if (Input.GetKeyDown(KeyCode.Escape)) {
-            PrintRoomHistory();
+            //PrintRoomHistory();
+            LocalRoomData roomData = GetCurrentLayer().GetComponent<LocalRoomData>();
+            Debug.Log("[CASE 3] Brick Count == " + roomData.numberOfBricks);
         }
     }
-
-
-    // Method to print all entries in the RoomHistory stack
-    public static void PrintRoomHistory() {
-        if (RoomHistory == null) {
-            Debug.Log("RoomHistory is null");
-            return;
-        }
-        if (RoomHistory.Count == 0) {
-            Debug.Log("RoomHistory is empty");
-            return;
-        }
-
-        // Convert stack to array to preserve order for printing
-        int[] historyArray = RoomHistory.ToArray();
-        for (int i = historyArray.Length - 1; i >= 0; i--) {
-            Debug.Log($"  [{i}]: Room {historyArray[i]}");
-        }
-    }
-
 
     public void transitionCheck() {
-        if (!hasLoadedNextLevel && !IsGameStart && !isRemovingBoard /*&& Input.GetButtonDown("Jump")*/) {
-            if (currentBoard < 0 || currentBoard >= levelLayers.Count || isShiftingDown) {
-                Debug.LogWarning("Current board does not exist or is shifting. Aborting board logic.");
-                return;
-            }
+        if (hasLoadedNextLevel || IsGameStart || isRemovingBoard) {
+            Debug.Log($"Transition blocked - hasLoadedNextLevel: {hasLoadedNextLevel}, IsGameStart: {IsGameStart}, isRemovingBoard: {isRemovingBoard}");
+            return;
+        }
 
-            // Find current board's roof
-            GameObject currentLayer = levelLayers[currentBoard];
+        GameObject currentLayer = GetCurrentLayer();
+        if (currentLayer == null) {
+            Debug.Log("Transition blocked - currentLayer is null");
+            return;
+        }
+
+        if (isShiftingDown) {
+            Debug.Log("Transition blocked - isShiftingDown is true");
+            return;
+        }
+
+        LocalRoomData roomData = currentLayer.GetComponent<LocalRoomData>();
+        if (roomData == null) {
+            Debug.Log("Transition blocked - roomData is null");
+            return;
+        }
+
+        // Only allow roof scrolling if layers aren't already moving down
+        if (!isShiftingDown && !isTransitioning) {
             Transform roofTransform = currentLayer.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name.StartsWith("Roof"));
-            if (roofTransform == null) return;
-            float roofDelta = roofTransform.position.y - (-4.5f + (10f * (currentBoard + 1f)));
+            if (roofTransform != null) {
+                float expectedRoofY = -4.5f + (10f * (currentBoardRow + 1f));
+                float roofDelta = roofTransform.position.y - expectedRoofY;
 
-            //Debug.Log("[ROOF MOVE] Checking for movement");
-            if (roofDelta > 0.01f && !isShiftingDown) { // Scroll roof if needed
-                //Debug.Log($"[ROOF MOVE] Current roof is at: {roofTransform.position.y}, but it should be at: {(-4.5f + (10f * (currentBoard + 1f)))}, so the difference is {roofDelta}. Moving all layers from {currentboard} to {levelLayers.Count} at speed of {moveSpeed}"); 
-                List<Transform> layersToMove = GetLayersFromIndex(currentBoard);
-                StartCoroutine(MoveLayersDown(layersToMove, referenceTransform: roofTransform, speed: moveSpeed));
-            }
+                if (Mathf.Abs(roofDelta) > 0.1f) {
+                    // CHECK IF WE SHOULD USE FASTER SCROLLING (only if camera is far from current room)
+                    roofScrollSpeedModifier = 1f; // Normal speed
 
-            // Brick-less transition ONLY when bricks are gone AND scrolling is done AND roof is at target
-            if (levelLayers[currentBoard].GetComponent<LocalRoomData>().numberOfBricks <= 0) {
-                Debug.Log("SIDE RESET: brickCount <= 0");
-                if (roofDelta <= 0.01f && !isShiftingDown) {
-                    Debug.Log("SIDE RESET: Starting start of board removal seq");
-                    if (levelLayers.Count > 1 && currentBoard < levelLayers.Count - 1 && levelLayers[currentBoard].GetComponent<LocalRoomData>().localLevelData.z == 0) { // If in Main Room
-                        isRemovingBoard = true;
-                        Debug.Log("SIDE RESET: Starting 1st board removal IEnum. In room: " + levelLayers[currentBoard].GetComponent<LocalRoomData>().localLevelData.z);
-                        StartCoroutine(BoardRemovalSequence());
-                    } else if (levelLayers.Count > 1 && currentBoard < levelLayers.Count - 1 && levelLayers[currentBoard].GetComponent<LocalRoomData>().localLevelData.z != 0) { // If in Side Room
-                        RemoveAndReturnToMostRecentCentralRoom();
-                        currentColumn = 0;
-                        Debug.Log("WWWWORKED: " + currentColumn);
-                    } else { // If final board, go to next level
-                        hasLoadedNextLevel = true;
-                        StopAllCoroutines();
-                        LoadNextLevel();
-                    }
-                } else {
-                    Debug.Log("Bricks are gone, but roof is still descending or scrolling active. Transition delayed.");
+
+                    List<Transform> layersToMove = GetLayersFromRow(currentBoardRow);
+                    if (roofCoroutine != null) StopCoroutine(roofCoroutine);
+
+                    isShiftingDown = true;
+                    //roofCoroutine = StartCoroutine(MovePlayerAndCameraUp(roofDelta, moveSpeed));
+                    StartCoroutine(MoveLayersDown(layersToMove, roofDelta, moveSpeed));
+
+                    // Reset the flag after starting the scroll
+                    needsFastRoofScroll = false;
+
+                    return; // exit early since we're moving layers
                 }
             }
         }
+
+        // Only trigger board removal / next level if no bricks remain
+        if (roomData.numberOfBricks <= 0f) {
+            Debug.Log($"[CASE 3] Board cleared at Row {currentBoardRow}, Column {currentBoardColumn}");
+            float boardZ = roomData.localRoomData.z;
+            int onesZ = ((int)Mathf.Floor(boardZ)) % 10;
+
+            switch (onesZ) {
+                case 0: // Move up a row, delete previous row
+                    Debug.Log("[CASE 3] Case 0 triggered. Brick Count == " + roomData.numberOfBricks);
+                    StartCoroutine(RemoveCurrentBoard(ZCase: 0));
+                    break;
+
+                case 1: // Delete current board, reset paddle/balls to previous board or main/side room
+                    Debug.Log("[CASE 3] Case 1 triggered. Brick Count == " + roomData.numberOfBricks);
+                    StartCoroutine(RemoveCurrentBoard(ZCase: 1));
+                    break;
+
+                case 2: // Load next level when bricks cleared
+                    StartCoroutine(RemoveCurrentBoard(ZCase: 2));
+                    break;
+
+                case 3:
+                    Debug.Log("[CASE 3] Case 3 triggered. Brick Count == " + roomData.numberOfBricks);
+                    break;
+            }
+        } else {
+            Debug.Log($"Brick count: {roomData.numberOfBricks} - not ready for transition");
+        }
     }
 
-    private List<Transform> GetLayersFromIndex(int startIndex) {
+    private List<Transform> GetLayersFromRow(int row) {
         List<Transform> layersToMove = new List<Transform>();
-        for (int i = startIndex; i < levelLayers.Count; i++) {
-            if (levelLayers[i] != null) {
-                Debug.Log($"[ROOF MOVE] Can confirm, moving levelLayer from: {startIndex} to {levelLayers.Count}");
-                layersToMove.Add(levelLayers[i].transform);
+        if (levelLayers == null) return layersToMove;
+
+        // Get ALL layers from ALL rows (not just current row and above)
+        for (int currentRow = 0; currentRow < levelLayers.GetLength(0); currentRow++) {
+            for (int col = 0; col < levelLayers.GetLength(1); col++) {
+                if (levelLayers[currentRow, col] != null && levelLayers[currentRow, col].transform != null) {
+                    layersToMove.Add(levelLayers[currentRow, col].transform);
+                }
             }
         }
         return layersToMove;
     }
 
-    private IEnumerator MoveLayersDown(List<Transform> layers, float? fixedDistance = null, float? duration = null, Transform referenceTransform = null, float speed = 5f) {
-        isShiftingDown = true;
+    private IEnumerator MoveLayersDown(List<Transform> layers, float distance, float speed = 5f) {
+        isShiftingDown = true; // Use static field
 
-        if (fixedDistance.HasValue && duration.HasValue) { // Fixed-distance move using Lerp
-            float elapsed = 0f;
-            List<Vector3> startPositions = layers.Select(l => l.position).ToList();
-            List<Vector3> endPositions = startPositions.Select(pos => pos - new Vector3(0, fixedDistance.Value, 0)).ToList();
+        Debug.Log($"[CASE 0] Starting MoveLayersDown | Layers: {layers.Count}, Distance: {distance}, Speed: {speed}");
 
-            while (elapsed < duration.Value) {
-                for (int i = 0; i < layers.Count; i++) {
-                    layers[i].position = Vector3.Lerp(startPositions[i], endPositions[i], elapsed / duration.Value);
-                }
-                elapsed += Time.deltaTime;
-                yield return null;
-            }
-            for (int i = 0; i < layers.Count; i++) {
-                layers[i].position = endPositions[i];
-            }
-        } 
+        // APPLY SPEED MODIFIER to the passed speed parameter
+        float effectiveSpeed = speed * roofScrollSpeedModifier;
 
-        float moveDistance = 0f;
-        if (referenceTransform != null && currentColumn == 0) { // Roof out of range scroll
-            if (currentLevelData != null && currentLevelData.LevelRooms.Count > currentBoard) {
-                // Expected roof Y for this board, using base formula + vertical offset
-                float expectedRoofY = -4.5f + (10f * (currentBoard + 1f)) + currentLevelData.LevelRooms[currentBoard].y;
-                moveDistance = currentLevelData.LevelRooms[currentBoard].y; // vertical offset
-                if (moveDistance < 0f) {
-                    moveDistance = Mathf.Abs(moveDistance); // ensure positive downward movement
-                }
-            } else {
-                Debug.LogWarning("[ROOF MOVE] Cannot find current room's vertical offset. Defaulting to 0.");
-                moveDistance = 0f;
-            }
+        float totalMoved = 0f;
+        float duration = Mathf.Abs(distance) / effectiveSpeed;
+        List<Vector3> startPositions = layers.Select(l => l.position).ToList();
+        List<Vector3> endPositions = startPositions.Select(pos => pos - new Vector3(0, distance, 0)).ToList();
 
-            Debug.Log($"[ROOF MOVE] Moving layers down by {moveDistance} (room vertical offset). Reference roof: {referenceTransform.name}");
-            float totalMoved = 0f;
-
-            while (totalMoved < moveDistance) {
-                float step = speed * Time.deltaTime;
-                step = Mathf.Min(step, moveDistance - totalMoved); // avoid overshoot
-                foreach (Transform layer in layers) {
-                    layer.position -= new Vector3(0, step, 0);
-                }
-                totalMoved += step;
-                if (layers.Count > 0) {
-                    Debug.Log($"[MOVE] Step {step}, top layer {layers[0].name} now at {layers[0].position.y}");
-                }
-                yield return null;
-            }
-            Debug.Log($"[MOVE] Completed move down by {moveDistance} units.");
+        for (int i = 0; i < layers.Count; i++) {
+            Debug.Log($"[CASE 0] Layer[{i}] {layers[i].name} Start: {startPositions[i]}, Target: {endPositions[i]}");
         }
-        isShiftingDown = false;
+
+        while (totalMoved < duration && isShiftingDown) {
+            // Check if there are no active balls and break out of the loop
+            if (ActiveBalls == null || ActiveBalls.Count <= 0) {
+                Debug.Log("Stopping scroll - no active balls");
+                break;
+            }
+
+            totalMoved += Time.deltaTime;
+            float t = Mathf.Clamp01(totalMoved / duration);
+
+            for (int i = 0; i < layers.Count; i++) {
+                if (layers[i] != null) {
+                    layers[i].position = Vector3.Lerp(startPositions[i], endPositions[i], t);
+                }
+            }
+            yield return null;
+        }
+
+        // Only complete the movement if we weren't canceled and there are still active balls
+        if (isShiftingDown && ActiveBalls != null && ActiveBalls.Count > 0) {
+            // Ensure final positions are exact
+            for (int i = 0; i < layers.Count; i++) {
+                if (layers[i] != null) {
+                    layers[i].position = endPositions[i];
+                }
+                Debug.Log($"[CASE 0] Layer[{i}] Final Position: {endPositions[i]}");
+            }
+        } else {
+            Debug.Log("[CASE 0] Scroll interrupted or no active balls - not completing movement");
+        }
+
+        // RESET SPEED MODIFIER AFTER SCROLL COMPLETES OR INTERRUPTS
+        roofScrollSpeedModifier = 1f;
+        isShiftingDown = false; // Use static field
+        Debug.Log("[CASE 0] Finished MoveLayersDown");
     }
 
 
+    public IEnumerator RemoveCurrentBoard(int ZCase) {
 
+        int rows = levelLayers.GetLength(0);
+        int cols = levelLayers.GetLength(1);
 
-    public IEnumerator BoardRemovalSequence() {
-        Debug.Log("SIDE RESET: Starting 2nd board removal IEnum");
-        StartCoroutine(RemoveCurrentBoard());
-        yield return new WaitForSeconds(0.6f); // Allow movement to complete
-        isRemovingBoard = false;
-    }
+        GameObject currentBoard = GetLayer(currentBoardRow, currentBoardColumn);
+        if (currentBoard == null) yield break;
 
+        LocalRoomData roomData = currentBoard.GetComponent<LocalRoomData>();
+        float boardZ = roomData?.localRoomData.z ?? 0f;
 
-    private IEnumerator RemoveCurrentBoard() {
-        if (currentBoard < 0 || currentBoard >= levelLayers.Count) {
-            Debug.LogWarning("Current board index out of bounds. Aborting removal.");
+        // Z = 2: Load Next Level
+        if (ZCase == 2) {
+            while (roomData != null && roomData.numberOfBricks > 0) yield return null;
+            hasLoadedNextLevel = true;
+            currentBoardColumn = 1;
+            currentBoardRow = 0;
+            LoadNextLevel();
             yield break;
         }
 
-        isShiftingDown = true;
-        float yOffset = levelLayers[currentBoard].GetComponent<LocalRoomData>().localLevelData.y;
+        // Z = 1: Delete current board & reset back to the Previous Room
+        if (ZCase == 1) {
+            Debug.Log("[CASE 3] ZCase == 1. brickCount == " + roomData.numberOfBricks);
+            // Store current position before destruction
+            int originalRow = currentBoardRow;
+            int originalColumn = currentBoardColumn;
 
-        // First, collect all indices to remove (current main room + its side rooms)
-        List<int> indicesToRemove = new List<int>();
-        indicesToRemove.Add(currentBoard);
-        Debug.Log($"SIDE RESET: Adding main room {currentBoard} to remove list (z = {currentLevelData.LevelRooms[currentBoard].z})");
+            levelLayers[currentBoardRow, currentBoardColumn] = null;
+            Destroy(currentBoard);
 
-        // Find all side rooms that belong to this main room
-        // Side rooms always come immediately after their main room
-        int i = currentBoard + 1;
-        Debug.Log($"SIDE RESET: Starting to check for side rooms from index {i}");
-        while (i < levelLayers.Count && levelLayers[i].GetComponent<LocalRoomData>().localLevelData.z != 0) {
-            // This is a side room connected to the current main room
-            Debug.Log($"SIDE RESET: Adding side room {i} to remove list (z = {currentLevelData.LevelRooms[i].z})");
-            indicesToRemove.Add(i);
-            i++;
-        }
-        // Log if we stopped because we found a main room or reached the end
-        if (i < levelLayers.Count) {
-            Debug.Log($"SIDE RESET: Stopped at index {i} (found main room with z = {currentLevelData.LevelRooms[i].z})");
-        } else {
-            Debug.Log($"SIDE RESET: Stopped at end of level (reached index {i})");
-        }
-        // Cache transforms to move (start from the first index after the last room to be removed)
-        int firstIndexToMove = indicesToRemove[indicesToRemove.Count - 1] + 1;
-        List<Transform> layersToMove = GetLayersFromIndex(firstIndexToMove);
+            // Use RoomHistory to find the previous room
+            if (RoomHistory != null && RoomHistory.Count > 0) {
+                // Remove the current room (which we're destroying) from history
+                Vector2 currentRoom = new Vector2(originalColumn, originalRow);
+                Queue<Vector2> cleanedHistory = new Queue<Vector2>();
 
-        // Store the current board before removal for reference
-        int originalCurrentBoard = currentBoard;
+                foreach (Vector2 room in RoomHistory) {
+                    if (room != currentRoom) {
+                        cleanedHistory.Enqueue(room);
+                    }
+                }
+                RoomHistory = cleanedHistory;
 
-        Debug.Log($"SIDE RESET: Removing {indicesToRemove.Count} rooms: main room at {currentBoard} + {indicesToRemove.Count - 1} side rooms");
-        Debug.Log($"SIDE RESET: First index to move: {firstIndexToMove}");
+                // Get the previous room (oldest in queue)
+                if (RoomHistory.Count > 0) {
+                    Vector2 previousRoom = RoomHistory.Peek(); // Oldest room is the previous one
+                    int previousRow = (int)previousRoom.y;
+                    int previousColumn = (int)previousRoom.x;
 
-        //if (currentColumn != 0) {
-        if (levelLayers[currentBoard].GetComponent<LocalRoomData>().localLevelData.z != 0) {
-            Debug.Log("[XTRANSITION] Resetting Ball POS");
-            XTransition xTransition = levelLayers[currentBoard].GetComponentInChildren<XTransition>(true);
-            if (xTransition != null) {
-                Debug.Log("[XTRANSITION] Starting side room transition...");
-                yield return StartCoroutine(xTransition.DoTransition());
-                Debug.Log("[XTRANSITION] Transition complete.");
+                    Debug.Log($"Returning to previous room from history: [{previousColumn}, {previousRow}] (was at [{originalColumn}, {originalRow}])");
+
+                    // Calculate vertical movement needed for paddle
+                    int rowDifference = previousRow - originalRow;
+
+                    // Update current position
+                    currentBoardRow = previousRow;
+                    currentBoardColumn = previousColumn;
+
+                    // Adjust paddle position based on vertical movement
+                    GameObject paddle = GameObject.Find("Paddle");
+                    PaddleMove paddleMove = paddle.GetComponent<PaddleMove>();
+                    if (paddleMove != null) {
+                        if (rowDifference > 0) {
+                            // Moving up - add paddle height
+                            paddleMove.baseYPos += 10 * rowDifference;
+                            paddleMove.currentYPos += 10 * rowDifference;
+                            paddleMove.maxFlipHeight += 10 * rowDifference;
+                            Debug.Log($"Moving paddle UP by {10 * rowDifference} units");
+                        } else if (rowDifference < 0) {
+                            // Moving down - subtract paddle height
+                            paddleMove.baseYPos += 10 * rowDifference; // rowDifference is negative
+                            paddleMove.currentYPos += 10 * rowDifference;
+                            paddleMove.maxFlipHeight += 10 * rowDifference;
+                            Debug.Log($"Moving paddle DOWN by {10 * -rowDifference} units");
+                        }
+
+                        // Center paddle in the new room
+                        GameObject newRoom = levelLayers[currentBoardRow, currentBoardColumn];
+                        if (newRoom != null) {
+                            Transform leftWall = null;
+                            Transform rightWall = null;
+
+                            foreach (Transform child in newRoom.transform) {
+                                if (child.name.StartsWith("LWall")) leftWall = child;
+                                else if (child.name.StartsWith("RWall")) rightWall = child;
+                            }
+                            if (leftWall != null && rightWall != null) {
+                                float roomCenterX = (leftWall.position.x + rightWall.position.x) / 2f;
+                                paddleMove.transform.position = new Vector3(roomCenterX, paddleMove.currentYPos, 0f);
+                                Debug.Log($"Centered paddle at X: {roomCenterX}, Y: {paddleMove.currentYPos}");
+                            }
+                        }
+                    }
+                } else {
+                    // Fallback: default to main room
+                    currentBoardRow = 0;
+                    currentBoardColumn = 1;
+                    Debug.Log("RoomHistory empty, defaulting to [1, 0]");
+                }
             } else {
-                Debug.LogWarning("SIDE RESET: XTransition component not found in current side room");
+                // Fallback: default to main room
+                currentBoardRow = 0;
+                currentBoardColumn = 1;
+                Debug.Log("No RoomHistory, defaulting to [1, 0]");
             }
-            currentColumn = 0;
-        }
-        // Remove rooms in reverse order to avoid index shifting issues
-        Debug.Log("SIDE RESET: Removing rooms in reverse order:");
-        for (int j = indicesToRemove.Count - 1; j >= 0; j--) {
-            int indexToRemove = indicesToRemove[j];
-            Debug.Log($"SIDE RESET: Removing room {indexToRemove}");
-            if (indexToRemove < levelLayers.Count) {
-                GameObject removedLayer = levelLayers[indexToRemove];
-                levelLayers.RemoveAt(indexToRemove);
-                numberOfBoards--;
-                Destroy(removedLayer);
-            } else {
-                Debug.LogWarning($"SIDE RESET: Index {indexToRemove} is out of bounds (levelLayers count: {levelLayers.Count})");
+
+            // Reset balls to the new room
+            GameObject targetRoomObj = levelLayers[currentBoardRow, currentBoardColumn];
+            if (targetRoomObj != null) {
+                Vector3 roomPos = targetRoomObj.transform.position;
+
+                foreach (var ball in ActiveBalls) {
+                    if (ball == null) continue;
+                    ball.transform.position = roomPos;
+
+                    BallMovement ballMove = ball.GetComponent<BallMovement>();
+                    if (ballMove != null) {
+                        ballMove.currentSpeed = 0.1f;
+                        ballMove.moveDir = Vector2.right;
+                    }
+                    ball.gameObject.SetActive(true);
+                }
             }
         }
-        // Update board index
-        if (currentBoard >= levelLayers.Count) {
-            currentBoard = Mathf.Max(0, levelLayers.Count - 1);
-            Debug.Log($"SIDE RESET: Updated currentBoard to {currentBoard}");
+
+        // --- Z = 0: Delete entire row
+        if (ZCase == 0) {
+            int rowToRemove = currentBoardRow;
+
+            Debug.Log("[CASE 0] ZCase == 0. rowToRemove == " + rowToRemove);
+            // 1) Cache GameObjects in this row before clearing
+            List<GameObject> roomsInDeletedRow = new List<GameObject>();
+            for (int columnIndex = 0; columnIndex < cols; columnIndex++) {
+                var room = levelLayers[rowToRemove, columnIndex];
+                if (room != null) {
+                    roomsInDeletedRow.Add(room);
+                    Debug.Log("[CASE 0] Room To Remove == " + room.name + " at " + rowToRemove + ", " + columnIndex);
+                }
+            }
+
+            float yOffset = 0f;
+            if (roomsInDeletedRow.Count > 0) {
+                for (int i = 0; i < roomsInDeletedRow.Count; i++) {
+                    if (roomsInDeletedRow[i] != null) {
+                        var data = roomsInDeletedRow[i].GetComponent<LocalRoomData>();
+                        if (data != null && data.localRoomData.y > yOffset) {
+                            yOffset = data.localRoomData.y;
+                        }
+                    }
+                }
+            }
+            Debug.Log("[Roof Scroll] yOffset: " + yOffset + " + 10 = " + (yOffset + 10));
+
+            List<Transform> roomsToMove = new List<Transform>();
+            for (int rowIndex = rowToRemove + 1; rowIndex < rows; rowIndex++) {
+                for (int columnIndex = 0; columnIndex < cols; columnIndex++) {
+                    GameObject room = levelLayers[rowIndex, columnIndex];
+                    if (room != null) {
+                        Debug.Log("[CASE 0] Going to move room: " + room + " currently at: " + rowIndex + ", " + columnIndex);
+                        roomsToMove.Add(room.transform);
+                    }
+                }
+            }
+
+            // 2) Shift rows above down
+            for (int sourceRow = rowToRemove + 1; sourceRow < rows; sourceRow++) {
+                for (int columnIndex = 0; columnIndex < cols; columnIndex++) {
+                    levelLayers[sourceRow - 1, columnIndex] = levelLayers[sourceRow, columnIndex];
+                    Debug.Log("[CASE 0]  moving: " + sourceRow + ", " + columnIndex + " To: " + (sourceRow - 1) + ", " + columnIndex);
+                }
+            }
+
+            // 3) Clear top row
+            for (int columnIndex = 0; columnIndex < cols; columnIndex++) {
+                levelLayers[rows - 1, columnIndex] = null;
+                Debug.Log("[CASE 0] Clearing old: " + (rows - 1) + ", " + columnIndex + " slots from 2D array");
+            }
+
+            // 4) Destroy the removed row’s objects
+            foreach (GameObject room in roomsInDeletedRow) {
+                if (room != null) {
+                    Debug.Log("[CASE 0] Removing from roomsInDeletedRow cache: " + room);
+                    Destroy(room);
+                }
+            }
+
+            // 5) Update currentBoardRow to be the row just below what we deleted
+            Debug.Log("[CASE 0] Old CurrentBoardRow: " + currentBoardRow);
+            currentBoardRow = Mathf.Max(0, rowToRemove);
+            Debug.Log("[CASE 0] New CurrentBoardRow: " + currentBoardRow);
+
+            // 6) Try to pick the new current room in the same column, otherwise fallback to first available
+            GameObject newCurrentRoom = levelLayers[currentBoardRow, currentBoardColumn];
+            if (newCurrentRoom == null) {
+                for (int c = 0; c < cols; c++) {
+                    if (levelLayers[currentBoardRow, c] != null) {
+                        currentBoardColumn = c;
+                        newCurrentRoom = levelLayers[currentBoardRow, c];
+                        Debug.Log("[CASE 0] New CurrentBoardColumn: " + c);
+                        Debug.Log("[CASE 0] So, sending player to position: " + currentBoardRow + ", " + c);
+                        break;
+                    }
+                }
+            }
+
+            if (newCurrentRoom != null) {
+                GameObject paddle = GameObject.Find("Paddle");
+                float paddleBaseY = paddle.GetComponent<PaddleMove>().baseYPos;
+                Vector3 spawnPos = new Vector3(newCurrentRoom.transform.position.x, paddleBaseY + 4, newCurrentRoom.transform.position.z);
+
+                foreach (var ball in ActiveBalls) {
+                    if (ball == null) continue;
+
+                    ball.transform.position = spawnPos;
+
+                    BallMovement ballMove = ball.GetComponent<BallMovement>();
+                    if (ballMove != null) {
+                        ballMove.currentSpeed = 0.1f;
+                        ballMove.moveDir = Vector2.down;
+                    }
+                    ball.gameObject.SetActive(true);
+                }
+            }
+
+
+            if (roomsToMove.Count > 0) {
+                float distance = 10f + yOffset;
+                float calculatedSpeed = distance / 0.5f;
+                Debug.Log("[CASE 0] Starting Layer Move Coroutine: " + roomsToMove + ", " + distance + ", " + calculatedSpeed);
+                yield return StartCoroutine(MoveLayersDown(roomsToMove, distance, calculatedSpeed));
+            }
         }
-        // Move layers down smoothly
-        StartCoroutine(MoveLayersDown(layersToMove, fixedDistance: 10f + yOffset, duration: 0.5f));
-        // Final checks
-        if (currentBoard >= 0 && currentBoard < levelLayers.Count) {
-            CountBricks();
-        } else {
+
+        // Final housekeeping
+        brickContainer = null;
+        CountBricks();
+
+        // If player falls below first row, load next level as a fallback
+        if (currentBoardRow < 0) {
             hasLoadedNextLevel = true;
-            LoadNextLevel();
+            LoadNextLevel();                                                                                 // FIX
+            yield break;
         }
+        yield break;
     }
 
-
-
-
-
-
-
-
-
-
-
     public void CountBricks() {
-        if (levelLayers == null || levelLayers.Count == 0) {
-            Debug.LogError("levelLayers is null or empty.");
+        // Skip brick counting entirely if between levels or during board removal
+        if (hasLoadedNextLevel || isRemovingBoard || isShiftingDown) {
+            brickCount = 0;
             return;
         }
 
-        if (currentBoard < 0) {
-            Debug.LogError("currentBoard index is out of bounds: " + currentBoard);
-            currentBoard = 0;
-        }
-        if (currentBoard >= levelLayers.Count) {
-            Debug.LogError("currentBoard index is out of bounds: " + currentBoard);
-            currentBoard = levelLayers.Count - 1;
-        }
-
-        GameObject currentLayer = levelLayers[currentBoard];
+        GameObject currentLayer = GetCurrentLayer();
         if (currentLayer == null) {
-            Debug.LogError("levelLayers[" + currentBoard + "] is null.");
+            brickCount = 0;
             return;
         }
 
         if (brickContainer == null) {
             Transform blockListTransform = currentLayer.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name.StartsWith("BlockList"));
-
             if (blockListTransform != null) {
                 brickContainer = blockListTransform.gameObject;
             } else {
@@ -482,102 +675,6 @@ public class GameManager : MonoBehaviour {
         }
     }
 
-    public void RemoveAndReturnToMostRecentCentralRoom() {
-        if (currentBoard < 0 || currentBoard >= levelLayers.Count) return;
-
-        isShiftingDown = true;
-
-        Transform currentSideRoomXTrans = null;
-
-        int mainRoomIndex = RoomHistory.ToArray()[RoomHistory.Count - 1];
-        Debug.Log("Room to go to: " + mainRoomIndex);
-
-        if (RoomHistory.Count > 1) {
-            // Convert stack to array to access elements by index (bottom is at index 0)
-            int[] roomArray = RoomHistory.ToArray();
-            int secondFromBottomIndex = roomArray[RoomHistory.Count - 2]; // Second from bottom
-            Debug.Log("Second from bottom index: " + secondFromBottomIndex);
-            if (secondFromBottomIndex >= 0 && secondFromBottomIndex < levelLayers.Count) { // Get reference to the main room's Xtransition object
-                currentSideRoomXTrans = levelLayers[secondFromBottomIndex].GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name.StartsWith("XTransition"));
-            }
-        }
-
-        if (currentSideRoomXTrans == null) {
-            Debug.LogWarning("No XTransition found in current side room!");
-            return;
-        }
-
-        GameObject mainRoomXTrans = currentSideRoomXTrans.GetComponent<XTransition>().partnerTransition;
-        Debug.Log("Main room XTrans: " + mainRoomXTrans);
-
-        // Pop from RoomHistory until only 1 remains
-        while (RoomHistory.Count > 1) {
-            int index = RoomHistory.Pop();
-            Debug.Log("Room History index to remove: " + index);
-
-            if (index >= 0 && index < levelLayers.Count) {
-                GameObject removedLayer = levelLayers[index];
-                levelLayers.RemoveAt(index);
-                Destroy(removedLayer);
-                numberOfBoards--;
-            }
-        }
-                
-        // If found, set currentBoard to that index; otherwise fallback to first board
-        if (mainRoomIndex >= 0) {
-            Debug.Log("Room to go to: " + mainRoomIndex);
-            currentBoard = mainRoomIndex;
-            if (mainRoomXTrans != null) {
-                Destroy(mainRoomXTrans);
-            }
-        } else {
-            Debug.Log("Room to go to: 0");
-            currentBoard = 0;
-        }
-
-        currentColumn = 0;
-
-        // Reset ball positions
-        int ballCount = ActiveBalls.Count(ball => ball != null && ball.gameObject != null);
-        float radius = 1.0f;
-        Debug.Log("There are " + ballCount + " balls to relocate in a circle of radius: " + radius);
-        for (int i = 0; i < ballCount; i++) {
-            var ball = ActiveBalls[i];
-            Debug.Log("Current ball: " + ball);
-            if (ball != null && ball.gameObject != null) {
-                // Calculate circular position
-                float angleDeg = i * (360f / ballCount);
-                float angleRad = angleDeg * Mathf.Deg2Rad;
-                Vector2 offset = new Vector2(Mathf.Cos(angleRad), Mathf.Sin(angleRad)) * radius;
-
-                Vector3 boardPosition = levelLayers[lastMainBoard].transform.position;
-                ball.transform.position = new Vector3(boardPosition.x + offset.x, boardPosition.y + offset.y, boardPosition.z);
-
-                BallMovement ballMovement = ball.GetComponent<BallMovement>();
-                if (ballMovement != null) {
-                    ballMovement.currentSpeed = 0.1f; // Set direction outward from center or upward
-                    ballMovement.moveDir = new Vector2(offset.x, offset.y).normalized;
-                }
-
-                if (!ball.gameObject.activeSelf) {
-                    Debug.Log("This ball isn't active");
-                    ball.gameObject.SetActive(true);
-                    Debug.Log("This ball is active");
-                }
-            }
-        }
-        // Reset brick container for the new board
-        Debug.Log("Resetting brickContainer");
-        brickContainer = null;
-        CountBricks();
-        StartCoroutine(ResetShiftingDownNextFrame());
-    }
-
-    private IEnumerator ResetShiftingDownNextFrame() {
-        yield return 10; // wait 1 frame
-        isShiftingDown = false;
-    }
-
 
 
 
@@ -595,7 +692,7 @@ public class GameManager : MonoBehaviour {
     public void shrinkPaddle() {
         GameObject paddle = GameObject.Find("Paddle");
         Vector3 scale = paddle.transform.localScale;
-        if (scale.x > 0.625f) {
+        if (scale.x > 0.5f) {
             paddle.GetComponent<PaddleMove>().magnetOffset /= 1.2f;
             scale.x /= PaddleSizeMod;
             paddle.transform.localScale = scale;
@@ -604,12 +701,12 @@ public class GameManager : MonoBehaviour {
     }
 
     public void superShrinkPaddle() {
-        GameObject paddle = GameObject.Find("Paddle"); 
+        GameObject paddle = GameObject.Find("Paddle");
         paddle.transform.localScale = new Vector3(0.7407407f, 1.8f, 0.54922f);
     }
 
 
-    
+
     public void BrickZap() {
         GameObject[] bricks = GameObject.FindGameObjectsWithTag("Brick");
         foreach (GameObject brick in bricks) {
@@ -624,16 +721,28 @@ public class GameManager : MonoBehaviour {
     }
 
     public void Lightning() {
-        GameObject[] bricks = GameObject.FindGameObjectsWithTag("Brick");
-        if (bricks.Length == 0) return;
-        List<GameObject> availableBricks = new List<GameObject>(bricks);
+        if (brickContainer == null) {
+            Debug.LogWarning("LocalRoomData or brickContainer not found, falling back to global search");
+            return;
+        }
+
+        // Get bricks only from this room's brickContainer
+        List<GameObject> availableBricks = new List<GameObject>();
+        foreach (Transform child in brickContainer.transform) {
+            ObjHealth health = child.GetComponent<ObjHealth>();
+            if (child.gameObject.activeInHierarchy && health != null && !health.Invincibility) {
+                availableBricks.Add(child.gameObject);
+            }
+        }
+        if (availableBricks.Count == 0) return;
 
         int strikes = Mathf.Min(3, availableBricks.Count);
         for (int x = 0; x < strikes; x++) {
             int index = UnityEngine.Random.Range(0, availableBricks.Count);
-            if (availableBricks[index].GetComponent<ObjHealth>() != null) {
+            GameObject brick = availableBricks[index];
+            if (brick.GetComponent<ObjHealth>() != null) {
                 // Lightning Strike animation
-                availableBricks[index].GetComponent<ObjHealth>().TakeDamage((int)availableBricks[index].GetComponent<ObjHealth>().health, 1, 0);
+                brick.GetComponent<ObjHealth>().TakeDamage((int)brick.GetComponent<ObjHealth>().health, 1, 0);
             }
             availableBricks.RemoveAt(index);
         }
@@ -699,11 +808,11 @@ public class GameManager : MonoBehaviour {
     #endregion
 
 
-    
+
     #region Ball Management
     public void SpawnBall() {
         bool grabbed = false;
-        foreach (var ball in GameManager.ActiveBalls) {
+        foreach (var ball in ActiveBalls) {
             if (ball != null) {
                 var ballMovement = ball.GetComponent<BallMovement>();
                 if (ballMovement != null && ballMovement.isStuckToPaddle) {
@@ -713,11 +822,11 @@ public class GameManager : MonoBehaviour {
             }
         }
         float direction = grabbed ? UnityEngine.Random.Range(-1f, 1f) : 1f;
-        GameObject newBall = Instantiate(ballPrefab, new Vector2(GameManager.ActiveBalls[0].transform.position.x + 0.5f, GameManager.ActiveBalls[0].transform.position.y), Quaternion.identity);
+        GameObject newBall = Instantiate(ballPrefab, new Vector2(ActiveBalls[0].transform.position.x + 0.5f, ActiveBalls[0].transform.position.y), Quaternion.identity);
         newBall.GetComponent<BallMovement>().isStuckToPaddle = false;
         newBall.GetComponent<BallMovement>().InitializeBall(new Vector2(direction, 1));
     }
-    
+
     public void SpawnEightBall() {
         if (ActiveBalls == null || ActiveBalls.Count == 0 || ActiveBalls[0] == null) {
             Debug.LogWarning("No active balls available to spawn from.");
@@ -726,7 +835,7 @@ public class GameManager : MonoBehaviour {
         Vector2 centerPos = ActiveBalls[0].transform.position;
         bool grabbed = false;
         // Unstick any balls that are stuck to the paddle
-        foreach (var ball in GameManager.ActiveBalls) {
+        foreach (var ball in ActiveBalls) {
             if (ball != null) {
                 var ballMovement = ball.GetComponent<BallMovement>();
                 if (ballMovement != null && ballMovement.isStuckToPaddle) {
@@ -773,22 +882,45 @@ public class GameManager : MonoBehaviour {
         }
     }
     #endregion
-    
+
 
 
     #region Game Logic
     private void UpdateGameState() {
         ballsInEditor = new List<GameObject>(ActiveBalls);
 
-        if (scoreText == null)
-            scoreText = FindObjectOfType<TMP_Text>();
+        if (scoreText == null) {
+            TMP_Text[] texts = FindObjectsOfType<TMP_Text>(true);
+            foreach (TMP_Text txt in texts) {
+                if (txt.name.EndsWith("ScoreText")) {
+                    scoreText = txt;
+                    break;
+                }
+            }
+        }
 
-        if (scoreText != null)
+        if (scoreText != null) {
             scoreText.text = CurrentScore.ToString();
+        }
+
+        if (DebugInfo == null) {
+            TMP_Text[] texts = FindObjectsOfType<TMP_Text>(true);
+            foreach (TMP_Text txt in texts) {
+                if (txt.name.EndsWith("DebugText")) {
+                    DebugInfo = txt;
+                    break;
+                }
+            }
+        }
     }
 
     private void HandleScore() {
-        if (CurrentScore > 0 && CurrentScore >= targetScore && !CanSpawnBall && brickCount > 0 && brickCount < initialBrickCount && !IsGameStart) { // Ball Spawn conditions
+        LocalRoomData roomData = GetCurrentLayer().GetComponent<LocalRoomData>();
+        if (roomData == null) {
+            Debug.Log("Transition blocked - roomData is null");
+            return;
+        }
+        if (CurrentScore > 0 && CurrentScore >= targetScore && !CanSpawnBall && roomData.numberOfBricks > 0 && roomData.numberOfBricks < roomData.initialNumberOfBricks && !IsGameStart) { // Ball Spawn conditions
             SpawnBall();
             CanSpawnBall = true;
             targetScore += 50;
@@ -809,28 +941,15 @@ public class GameManager : MonoBehaviour {
         if (!string.IsNullOrEmpty(nextScene)) {
             hasLoadedNextLevel = true;
             StopAllCoroutines(); // Stop coroutines using old scene data
+            currentPosition = new Vector2(1, 0);
+            currentBoardColumn = 1;
+            currentBoardRow = 0;
+            RoomHistory = new Queue<Vector2>();
+            RoomHistory.Enqueue(new Vector2(1, 0));
             SceneManager.LoadScene(nextScene);
-            numberOfBoards = GameObject.Find("LevelManager").GetComponent<LevelBuilder>().boardStats.LevelRooms.Count;
+            numberOfBoards = GameObject.Find("LevelManager").GetComponent<LevelBuilder>().levelData.LevelRooms.Count;
         }
-        /*else if (numberOfBoards == 1)
-        {
-            ceilinigDestroyed = true;
-            if (CeilingDestroy.Instance != null) {
-                CeilingDestroy.Instance.StartDestroyCeiling(blankTransitionTime);
-            } else {
-                Debug.LogWarning("CeilingManager.Instance is null. Cannot destroy ceiling.");
-            }
-        }*/
-
     }
-
-
-    /*private IEnumerator DestroyCeiling(float waitTime) {
-        yield return new WaitForSeconds(waitTime);
-        GameObject barrier = GameObject.Find("Ceiling");
-        if (barrier != null)
-            Destroy(barrier);
-    }*/
     #endregion
 
 
@@ -843,7 +962,6 @@ public class GameManager : MonoBehaviour {
         brickContainer = null;
         scoreText = null;
         RebuildLevelLayers();
-        currentBoard = 0;
     }
     #endregion
 
@@ -866,18 +984,29 @@ public class GameManager : MonoBehaviour {
         boardAmount = numberOfBoards;
         BrickThu = brickThu;
         FireBall = fireBall;
-        //PaddleSizeMod = paddleSizeMod;
         GravityBall = gravityBall;
-        currentboard = currentBoard;
         LevelLayers = levelLayers;
         brickcontainer = brickContainer;
         shiftingDown = isShiftingDown;
-        currentcolumn = currentColumn;
         lastmainmoard = lastMainBoard;
         roomHistory = RoomHistory;
+        isTransitioning = istransitioning;
+        currentPosition.y = currentBoardRow;
+        currentPosition.x = currentBoardColumn;
+        brickLimit = BrickLimit;
     }
 
     public void debugOptions() {
+        LocalRoomData roomData = null;
+        GameObject currentLayer = GetCurrentLayer();
+        if (currentLayer == null) {
+            Debug.LogWarning("[DEBUG] Current Layer is null for some reason");
+        }
+        roomData = currentLayer.GetComponent<LocalRoomData>();
+        if (roomData == null) {
+            Debug.LogWarning("[DEBUG] RoomData is null for some reason");
+        }
+
         if (Input.GetKeyDown(KeyCode.BackQuote)) {
             DebugMode = !DebugMode;
             Debug.Log($"Debug Mode: {(DebugMode ? "ON" : "OFF")}");
@@ -949,101 +1078,115 @@ public class GameManager : MonoBehaviour {
             Debug.Log("Paddle super shrunk");
         }
 
-        /*if (Input.GetKeyDown(KeyCode.V)) {
+        if (Input.GetKeyDown(KeyCode.V)) {
             // Spawn random power-up at paddle position
             GameObject paddle = GameObject.Find("Paddle");
             if (paddle != null) {
-                float randomOdds = Random.Range(0f, 1f);
+                float randomOdds = UnityEngine.Random.Range(0f, 1f);
                 PowerUpSpawn(randomOdds, new Vector3(paddle.transform.position.x, paddle.transform.position.y + 5f, 0f));
                 Debug.Log("Spawned random power-up above paddle");
             }
-        }*/
+        }
 
-        // Game Flow Debugging
+        // Toggle Game Start
         if (Input.GetKeyDown(KeyCode.G)) {
             IsGameStart = !IsGameStart;
             Debug.Log($"Game Start: {IsGameStart}");
         }
 
+        // Clear all bricks in current room
         if (Input.GetKeyDown(KeyCode.H)) {
-            // Force board transition
-            if (levelLayers.Count > 0 && currentBoard < levelLayers.Count) {
-                levelLayers[currentBoard].GetComponent<LocalRoomData>().numberOfBricks = 0;
-                Debug.Log("Force cleared bricks for transition");
+            if (roomData != null) {
+                roomData.numberOfBricks = 0;
+                Debug.Log("[DEBUG] Force cleared bricks for transition in current room");
             }
         }
 
+        // Force a Left Transition
         if (Input.GetKeyDown(KeyCode.Y)) {
-            XTransition[] xTransitions = levelLayers[currentBoard].GetComponentsInChildren<XTransition>(true);
-            if (xTransitions.Length == 0) {
-                Debug.LogWarning("No XTransition components found in current room");
+            // Find all XTransition objects in this room
+            XTransition[] xTransitions = currentLayer.GetComponentsInChildren<XTransition>(true);
+            if (xTransitions == null || xTransitions.Length == 0) {
+                Debug.LogWarning("[DEBUG] No XTransition components found in current room.");
                 return;
             }
 
-            XTransition leftTransition = null;
-            foreach (XTransition xTransition in xTransitions) {
-                if (currentColumn == 0) {
-                    if (xTransition != null && xTransition.transition == -1) {
-                        leftTransition = xTransition;
-                        break;
-                    }
-                } else if (currentColumn == 1) {
-                    if (xTransition != null && xTransition.transition == 0) {
-                        leftTransition = xTransition;
-                        break;
-                    }
-                }
+            // Determine target transition based on current column
+            int targetTransitionValue = -1;
+            if (currentBoardColumn == 1) {
+                targetTransitionValue = 0;
+            } else if (currentBoardColumn == 2) {
+                targetTransitionValue = 1;
             }
 
-            if (leftTransition != null) {
-                Debug.Log("[XTRANSITION] Starting Left Hand Side Room transition...");
-                ActiveBalls[0].transform.position = leftTransition.transform.position;
+            if (targetTransitionValue != -1 && ActiveBalls.Count > 0) {
+                Debug.Log("[DEBUG] Starting Left Hand Side Room transition...");
+                foreach (GameObject ball in ActiveBalls) {
+                    ball.transform.position = levelLayers[currentBoardRow, targetTransitionValue].transform.position;
+                    ball.GetComponent<BallMovement>().moveDir.y = 1;
+                }
+                currentBoardColumn = targetTransitionValue;
             } else {
-                Debug.LogWarning("No XTransition with transition value -1 found in current room");
+                Debug.LogWarning("No appropriate left XTransition found in current room");
             }
         }
 
+        // Force a Right Transition
         if (Input.GetKeyDown(KeyCode.U)) {
-            XTransition[] xTransitions = levelLayers[currentBoard].GetComponentsInChildren<XTransition>(true);
-            if (xTransitions.Length == 0) {
-                Debug.LogWarning("No XTransition components found in current room");
+            if (currentLayer == null) {
+                Debug.LogWarning("[DEBUG] Current layer is null. Cannot perform left transition.");
+                return;
+            }
+            // Find all XTransition objects in this room
+            XTransition[] xTransitions = currentLayer.GetComponentsInChildren<XTransition>(true);
+            if (xTransitions == null || xTransitions.Length == 0) {
+                Debug.LogWarning("[DEBUG] No XTransition components found in current room.");
                 return;
             }
 
-            XTransition rightTransition = null;
-            foreach (XTransition xTransition in xTransitions) {
-                if (currentColumn == 0) {
-                    if (xTransition != null && xTransition.transition == 1) {
-                        rightTransition = xTransition;
-                        break;
-                    }
-                } else if (currentColumn == -1) {
-                    if (xTransition != null && xTransition.transition == 0) {
-                        rightTransition = xTransition;
-                        break;
-                    }
+            // Determine target transition based on current column
+            int targetTransitionValue = -1;
+            if (currentBoardColumn == 0) {
+                targetTransitionValue = 1;
+            } else if (currentBoardColumn == 1) {
+                targetTransitionValue = 2;
+            }
+
+            if (targetTransitionValue != -1 && ActiveBalls.Count > 0) {
+                Debug.Log("[DEBUG] Starting Left Hand Side Room transition...");
+                foreach (GameObject ball in ActiveBalls) {
+                    ball.transform.position = levelLayers[currentBoardRow, targetTransitionValue].transform.position;
+                    ball.GetComponent<BallMovement>().moveDir.y = 1;
                 }
-            }
-
-            if (rightTransition != null) {
-                Debug.Log("[XTRANSITION] Starting Left Hand Side Room transition...");
-                ActiveBalls[0].transform.position = rightTransition.transform.position;
+                currentBoardColumn = targetTransitionValue;
             } else {
-                Debug.LogWarning("No XTransition with transition value -1 found in current room");
+                Debug.LogWarning("No appropriate left XTransition found in current room");
             }
         }
 
-        if (Input.GetKeyDown(KeyCode.J) && currentBoard < levelLayers.Count - 1) {
-            if (currentColumn == 0) {
+        // Force an Upward Transition
+        if (Input.GetKeyDown(KeyCode.J) && currentBoardRow < levelLayers.GetLength(0) - 1) {
+            int nextRow = currentBoardRow + 1;
+            if (levelLayers != null && nextRow < levelLayers.GetLength(0) && levelLayers[nextRow, currentBoardColumn] != null && ActiveBalls.Count > 0) {
                 PaddleMove paddleMove = GameObject.Find("Paddle").GetComponent<PaddleMove>();
-                ActiveBalls[0].transform.position = new Vector3(ActiveBalls[0].transform.position.x, paddleMove.baseYPos + 11f, 0f);
+                foreach (GameObject ball in ActiveBalls) {
+                    ball.transform.position = levelLayers[currentBoardRow + 1, currentBoardColumn].transform.position;
+                }
+                Debug.Log($"[DEBUG] Forced upward transition to row {nextRow} in column {currentBoardColumn}");
+                currentBoardRow = nextRow;
             }
         }
 
-        if (Input.GetKeyDown(KeyCode.K) && currentBoard > 0) {
-            if (currentColumn == 0) {
+        // Force a Downward Transition
+        if (Input.GetKeyDown(KeyCode.K) && currentBoardRow > 0) {
+            int prevRow = currentBoardRow - 1;
+            if (levelLayers != null && prevRow >= 0 && levelLayers[prevRow, currentBoardColumn] != null && ActiveBalls.Count > 0) {
                 PaddleMove paddleMove = GameObject.Find("Paddle").GetComponent<PaddleMove>();
-                ActiveBalls[0].transform.position = new Vector3(ActiveBalls[0].transform.position.x, paddleMove.baseYPos - 2f, 0f);
+                foreach (GameObject ball in ActiveBalls) {
+                    ball.transform.position = levelLayers[currentBoardRow - 1, currentBoardColumn].transform.position;
+                }
+                Debug.Log($"[DEBUG] Forced downward transition to row {prevRow} in column {currentBoardColumn}");
+                currentBoardRow = prevRow;
             }
         }
 
@@ -1060,18 +1203,103 @@ public class GameManager : MonoBehaviour {
         if (Input.GetKeyDown(KeyCode.Alpha8)) SpawnPowerUpByIndex(7);
         if (Input.GetKeyDown(KeyCode.Alpha9)) SpawnPowerUpByIndex(8);
         if (Input.GetKeyDown(KeyCode.Alpha0)) SpawnPowerUpByIndex(9);
-
-        // Information Display
-        if (Input.GetKeyDown(KeyCode.I)) {
-            Debug.Log("=== GAME STATE INFO ===");
-            Debug.Log($"Current Board: {currentBoard}/{levelLayers.Count - 1}");
-            Debug.Log($"Bricks: {brickCount}/{initialBrickCount}");
-            Debug.Log($"Active Balls: {ActiveBalls.Count}");
-            Debug.Log($"Score: {CurrentScore} (Multiplier: x{scoreMult})");
-            Debug.Log($"Next Scene: {nextScene}");
-            Debug.Log($"Is Shifting Down: {isShiftingDown}");
-            Debug.Log($"Current Column: {currentColumn}");
+        if (DebugInfo != null && roomData != null) {
+            debugText(roomData);
+        } else {
+            Debug.LogWarning("DebugInfo TMP_Text is not assigned!");
         }
+    }
+
+    public void debugText(LocalRoomData roomData) {
+        string activeBallsSummary = "None";
+        if (ActiveBalls != null && ActiveBalls.Count > 0) {
+            var aliveBalls = ActiveBalls
+                .Where(b => b != null) // filters destroyed objects
+                .Take(5)
+                .Select(b => b ? b.name : "null"); // safe access using conditional
+            activeBallsSummary = string.Join(", ", aliveBalls);
+            if (ActiveBalls.Count > 5) activeBallsSummary += "...";
+            if (!aliveBalls.Any()) activeBallsSummary = "None";
+        }
+
+
+        // RoomHistory summary (skip invalid/destroyed entries)
+        string roomHistorySummary = "Empty";
+        if (RoomHistory != null && RoomHistory.Count > 0) {
+            var validRooms = RoomHistory
+                .Where(r => r != null) // for GameObjects, or just skip if Vector2
+                .Take(5)
+                .Select(r => r.ToString()); // Vector2 is safe, for GameObjects use: r ? r.name : "null"
+            roomHistorySummary = string.Join(", ", validRooms);
+            if (RoomHistory.Count > 5) roomHistorySummary += "...";
+        }
+
+
+        int rows = 0;
+        int cols = 0;
+        if (levelLayers != null) {
+            rows = levelLayers.GetLength(0);
+            cols = levelLayers.GetLength(1);
+        }
+        int bricks = 0;
+        int initialBricks = 0;
+        if (roomData != null) {
+            bricks = roomData.numberOfBricks;
+            initialBricks = roomData.initialNumberOfBricks;
+        }
+        string brickContainerName = "N/A";
+        if (brickContainer != null) {
+            brickContainerName = brickContainer.name;
+        }
+        int activeBallCount = 0;
+        if (ActiveBalls != null) {
+            activeBallCount = ActiveBalls.Count;
+        }
+        string activeBallsText = "N/A";
+        if (activeBallsSummary != null) {
+            activeBallsText = activeBallsSummary;
+        }
+        int historyCount = 0;
+        if (RoomHistory != null) {
+            historyCount = RoomHistory.Count;
+        }
+        string historyText = "N/A";
+        if (roomHistorySummary != null) {
+            historyText = roomHistorySummary;
+        }
+        string nextSceneName = "N/A";
+        if (nextScene != null) {
+            nextSceneName = nextScene;
+        }
+        string currentLevel = "N/A";
+        if (currentLevelData != null) {
+            currentLevel = currentLevelData.ToString();
+        }
+        string powerUpsText = "N/A";
+        if (powerUps != null) {
+            powerUpsText = powerUps.ToString();
+        }
+
+        DebugInfo.text =
+            "=== GAME STATE INFO ===\n" +
+            "IsGameStart: " + IsGameStart + "\n" +
+            "Current Board: Row " + currentBoardRow + ", Column " + currentBoardColumn + "\n" +
+            "Total Rows: " + rows + ", Columns: " + cols + "\n" +
+            "Bricks: " + bricks + "/" + initialBricks + " from " + brickContainerName + " Z: " + roomData.localRoomData.z + "\n\n" +
+            "Active Balls (" + activeBallCount + "): " + activeBallsText + "\n\n" +
+            "Room History (" + historyCount + "): " + historyText + "\n\n" +
+            "Target Score: " + targetScore + ", Can Spawn Ball: " + CanSpawnBall + "\n" +
+            "Score: " + CurrentScore + " (Multiplier: x" + scoreMult + " - " + scoreMultTimer + "s)\n" +
+            "Next Scene: " + nextSceneName + ", Has Loaded Next Level: " + hasLoadedNextLevel + "\n" +
+            "Is Shifting Down: " + isShiftingDown + ", Is Transitioning: " + isTransitioning + "\n" +
+            "Is Removing Board: " + isRemovingBoard + ", Blank Transition Time: " + blankTransitionTime + "\n" +
+            "Move Speed: " + moveSpeed + ", Paddle Size Mod: " + PaddleSizeMod + "\n" +
+            "Current Level Data: " + currentLevel + "\n" +
+            "BrickThu: " + brickThu + ", FireBall: " + fireBall + ", GravityBall: " + gravityBall + ", SuperShrink: " + superShrink + "\n" +
+            "PowerUps: " + powerUpsText;
+
+        SetDebugOutline(0.4f, Color.black);
+
     }
 
     private void SpawnPowerUpByIndex(int index) {
@@ -1082,6 +1310,18 @@ public class GameManager : MonoBehaviour {
         GameObject paddle = GameObject.Find("Paddle");
         Instantiate(powerUps[index].prefab, new Vector3(paddle.transform.position.x, paddle.transform.position.y + 5f), Quaternion.identity);
         Debug.Log($"Spawned {powerUps[index].itemName} at position {new Vector3(paddle.transform.position.x, paddle.transform.position.y + 5f)}");
+    }
+
+    public void SetDebugOutline(float thickness, Color color) {
+        if (DebugInfo == null) return;
+
+        if (!DebugInfo.fontMaterial.name.EndsWith("(Instance)")) {
+            DebugInfo.fontMaterial = new Material(DebugInfo.fontMaterial);
+        }
+
+        DebugInfo.fontMaterial.SetFloat(ShaderUtilities.ID_OutlineWidth, Mathf.Clamp01(thickness));
+        DebugInfo.fontMaterial.SetColor(ShaderUtilities.ID_OutlineColor, color);
+        DebugInfo.SetMaterialDirty();
     }
     #endregion
 }

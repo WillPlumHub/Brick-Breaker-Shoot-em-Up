@@ -15,14 +15,16 @@ MonoBehaviour:
   StageName: MultiBoard
   difficulty: 2
   description: df
-  LevelRooms:
-  - {x: 0, y: 0, z: 0, w: 0}
-  - {x: 0, y: 0, z: 1.5, w: 0}
-  - {x: -1, y: 0, z: -1.9, w: 0}
-  - {x: 2.7, y: 0, z: 0, w: 0}
-  - {x: 2.7, y: 0, z: 0, w: 0}
-  - {x: 0, y: 0, z: 1.2, w: 0}
-  - {x: -1, y: 0, z: 0, w: 0}
-  - {x: 0, y: 0, z: 1.2, w: 0}
-  - {x: 0, y: 0, z: -1.2, w: 0}
-  - {x: -2, y: 0, z: 0, w: 0}
+  LevelRoomsInspector:
+  - leftRoom: {x: -2.7, y: 0, z: 1.2, w: 51}
+    mainRoom: {x: -4.3, y: 0, z: 3.1, w: 51}
+    rightRoom: {x: -2, y: 0, z: 3.2, w: 51}
+  - leftRoom: {x: 2.7, y: 0, z: 3.1, w: 552}
+    mainRoom: {x: 2.7, y: 50, z: 3.1, w: 552}
+    rightRoom: {x: 2.7, y: 0, z: 3.1, w: 552}
+  - leftRoom: {x: -2, y: 0, z: 3.2, w: 0}
+    mainRoom: {x: -2, y: 0, z: 3.2, w: 0}
+    rightRoom: {x: -2, y: 0, z: 3.2, w: 0}
+  - leftRoom: {x: 0, y: 0, z: 3.2, w: 0}
+    mainRoom: {x: 0, y: 0, z: 3.2, w: 0}
+    rightRoom: {x: 0, y: 0, z: 3.2, w: 0}

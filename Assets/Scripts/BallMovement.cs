@@ -38,6 +38,9 @@ public class BallMovement : MonoBehaviour {
     public int scoreMult;
     public bool ceilingBreak = false;
 
+    [Header("Transition Freeze")]
+    public bool isHorizontalTransitioning = false;
+
     #region Initialization
     private void Awake() {
         paddle = GameObject.Find("Paddle");
@@ -76,12 +79,26 @@ public class BallMovement : MonoBehaviour {
         ClampMoveDirection();
         bounceCheck();
         GravityBallManager();
+
+        if (Input.GetKeyDown(KeyCode.KeypadEnter)) {
+            moveDir = Vector2.zero;
+        }
+
+         if (GameManager.isTransitioning) {
+            Vector2 savedMoveDir = moveDir;
+            savedSpeed = currentSpeed;
+            moveDir = Vector2.zero;
+            currentSpeed = 0f;
+            Debug.Log("[NEW TEST] SavedMoveDir: " + savedMoveDir + ", new moveDir: " + moveDir);
+         }
     }
 
     
 
     #region Ball Movement Helpers
     private void MoveBall() {
+        if (GameManager.isTransitioning || isHorizontalTransitioning) return;
+
         if (moveDir != Vector2.zero) {
             transform.position += new Vector3(moveDir.x, moveDir.y, 0f).normalized * currentSpeed * Time.deltaTime;
         }
@@ -159,417 +176,460 @@ public class BallMovement : MonoBehaviour {
 
 
     #region Transitions
-    public void boardTransition()
-    {
+    public void boardTransition() {
+        if (GameManager.hasLoadedNextLevel || GameManager.isRemovingBoard) {
+            // Debug.Log("[boardTransition] Skipped due to level load/board removal.");
+            return;
+        }
+
+        if (paddle == null) return;
         PaddleMove paddleMove = paddle.GetComponent<PaddleMove>();
-        if (paddleMove == null)
-        {
-            //Debug.LogError("PaddleMove component not found on paddle.");
+        if (paddleMove == null) return;
+
+        GameObject currentLayer = GameManager.GetCurrentLayer();
+        if (currentLayer == null) {
+            Debug.LogWarning("[boardTransition] No currentLayer found. Aborting.");
             return;
         }
 
-        /*if (GameManager.isShiftingDown) {
+        LocalRoomData roomData = currentLayer.GetComponent<LocalRoomData>();
+        if (roomData == null) {
+            Debug.LogWarning("[boardTransition] No LocalRoomData on currentLayer. Aborting.");
             return;
-        }*/
-
-        int boardCount;
-        if (GameManager.levelLayers == null)
-        {
-            boardCount = 0;
         }
-        else
-        {
-            boardCount = GameManager.levelLayers.Count;
+
+        if (GameManager.levelLayers == null) {
+            Debug.LogWarning("[boardTransition] levelLayers is null. Aborting.");
+            return;
         }
-        int currentBoard = GameManager.currentBoard;
 
-        // Try to move UP a board
-        if (transform.position.y > paddleMove.baseYPos + 10 && currentBoard + 1 < boardCount && !GameManager.isShiftingDown)
+        int totalRows = GameManager.levelLayers.GetLength(0);
+
+        // BOUNCE DOWN if roof is scrolling and ball is too high
+        if (GameManager.isShiftingDown && transform.position.y > paddleMove.baseYPos + 9.35f)
         {
-            Debug.Log("GOING UP: BallMovement for loop activated");
-            for (int i = GameManager.currentBoard + 1; i < boardCount; i++)
-            {
-                if ((int)GameManager.levelLayers[i].GetComponent<LocalRoomData>().localLevelData.z == (int)GameManager.levelLayers[GameManager.currentBoard].GetComponent<LocalRoomData>().localLevelData.z)
-                {
-                    //if ((int) GameManager.currentLevelData.LevelRooms[i].z == (int) GameManager.currentLevelData.LevelRooms[GameManager.currentBoard].z) {
-                    //if (GameManager.levelLayers[i] == 0) {
-                    Debug.Log("GOING UP FINAL: CurrentBoard is: " + GameManager.currentBoard + ": " + GameManager.currentLevelData.LevelRooms[GameManager.currentBoard].z + " -> " + GameManager.currentLevelData.LevelRooms[i].z + ", thus " + i);
-                    GameManager.currentBoard = i;
-                    break;
-                }
-            }
+            Debug.Log("[Rebounding] Rebounding now during roof scroll");
+            moveDir.y = -1;
+        }
+        else if (transform.position.y > paddleMove.baseYPos + 10 && GameManager.currentBoardRow + 1 < totalRows && !GameManager.isShiftingDown)
+        { // Try to move UP a board (only if roof is NOT scrolling)
+            GameManager.isTransitioning = true;
+            Debug.Log("GOING UP");
 
-            if (!GameManager.RoomHistory.Contains(GameManager.currentBoard))
-            {
-                if (GameManager.currentColumn == 0)
-                {
-                    GameManager.RoomHistory.Clear();
-                    GameManager.RoomHistory.Push(GameManager.currentBoard);
-                }
-                else
-                {
-                    GameManager.RoomHistory.Push(GameManager.currentBoard);
-                }
-            }
-
-            paddleMove.currentYPos += 10;
+            GameManager.currentBoardRow += 1;
             paddleMove.baseYPos += 10;
+            paddleMove.currentYPos += 10;
             paddleMove.maxFlipHeight += 10;
-        } else if (transform.position.y > paddleMove.baseYPos + 9.3f && currentBoard + 1 < boardCount && GameManager.isShiftingDown) {
-            bounce(false);
+
+            Vector2 roomAbove = new Vector2(GameManager.currentBoardColumn, GameManager.currentBoardRow);
+            UpdateRoomHistory(roomAbove);
+            GameManager.isTransitioning = false;
         }
+        else if (transform.position.y < paddleMove.baseYPos - 1.1f && GameManager.currentBoardRow > 0)
+        { // Try to move DOWN a board - Only allow if roof is NOT scrolling
 
+            if (!GameManager.isShiftingDown)
+            {
 
-        
-
-            // Try to move DOWN a board
-            if (transform.position.y < paddleMove.baseYPos - 1.1f && GameManager.currentBoard > 0 && !GameManager.isShiftingDown) {
-            Debug.Log("GOING DOWN: BallMovement for loop activated");
-            int currentZ = (int)GameManager.levelLayers[GameManager.currentBoard].GetComponent<LocalRoomData>().localLevelData.z;
-
-            for (int i = GameManager.currentBoard - 1; i >= 0; i--) {
-                Vector4 target = GameManager.levelLayers[i].GetComponent<LocalRoomData>().localLevelData;
-
-                if ((int)target.z == currentZ) {
-                    Debug.Log("GOING DOWN: Found next room: " + GameManager.currentBoard + " to " + i + ".   " + currentZ + ", " + (int)target.z);
-
-                    if (currentZ == 0) { // If Main Room
-
-                        if (target.y != 0) {
-                            Debug.Log("[Y TRANS CHECK] Shouldn't transition");
-                            bounce(false);
-                            // Play reject SFX
-                            break;
-                        }
-
-                        Debug.Log($"GOING DOWN: Moving from board {GameManager.currentBoard} (z={currentZ}) to {i} (z={(int)target.z})");
-                        GameManager.currentBoard = i;
-                        
-                        // Clear the RoomHistory stack
-                        if (!GameManager.RoomHistory.Contains(GameManager.currentBoard))
-{
-                            GameManager.RoomHistory.Clear();
-                            GameManager.RoomHistory.Push(GameManager.currentBoard);
-                        }
-
-                        // Adjust paddle positions
-                        paddleMove.currentYPos -= 10;
-                        paddleMove.baseYPos -= 10;
-                        paddleMove.maxFlipHeight -= 10;
-                        break;
-                    } else { // If Side Room
-                        // Check if the main room connected to this side room's Y != 0
-                        float mainRoomY = 0;
-                        bool mainRoom1 = (i - 1 >= 0) && GameManager.levelLayers[i - 1].GetComponent<LocalRoomData>().localLevelData.z == 0 && GameManager.levelLayers[i - 1].GetComponent<LocalRoomData>().localLevelData.y != 0f;
-                        if (mainRoom1) {
-                            mainRoomY = GameManager.levelLayers[i - 1].GetComponent<LocalRoomData>().localLevelData.y;
-                        }
-                        bool mainRoom2Valid = (i - 2 >= 0) && GameManager.levelLayers[i - 2].GetComponent<LocalRoomData>().localLevelData.z == 0 && GameManager.levelLayers[i - 2].GetComponent<LocalRoomData>().localLevelData.y != 0f;
-                        if (mainRoom2Valid) {
-                            mainRoomY = GameManager.levelLayers[i - 2].GetComponent<LocalRoomData>().localLevelData.y;
-                        }
-
-                        // If the main room's Y != 0, skip this side room
-                        if (mainRoom1 || mainRoom2Valid) {
-                            Debug.Log("GOING DOWN: Skipping side room - connected main room has invalid Y position (!0). targetZ.y: " + target.y + ", mainRoomY: " + mainRoomY);
-                            if (target.y != mainRoomY) {
-                                continue;
-                            } else {
-                                Debug.Log("[Y TRANS CHECK] Shouldn't transition");
-                                bounce(false);
-                                // Play reject SFX
-                                break;
-                            }
-                        }
-
-                        Debug.Log("GOING DOWN: Side Room: " + GameManager.currentBoard + " to " + i + ".   " + currentZ + ", " + (int)target.z);
-                        // Iterate to Target Room, counting every main room along the way
-                        int zeroCount = 0;
-                        for (int j = GameManager.currentBoard; j >= i; j--) {
-                            Debug.Log("GOING DOWN: loop " + j + " to " + i);
-                            if ((int)GameManager.levelLayers[j].GetComponent<LocalRoomData>().localLevelData.z == 0) {
-                                zeroCount++;
-                                Debug.Log("GOING DOWN: Found a main board, adding to zeroCount: " + zeroCount);
-                            }
-                        }
-
-                        if (zeroCount >= 2) { // If new Side Room isn't connected vertically (there's more than 2 main rooms between)
-                            Debug.Log("GOING DOWN: Side Room gap. Current Board was: " + GameManager.currentBoard + ", lastMainBoard: " + GameManager.lastMainBoard);
-                            Debug.Log("Last Main board: " + GameManager.lastMainBoard + ", Current Board pretrans: " + GameManager.currentBoard);
-                            int count = 0;
-                            foreach (var ball in GameManager.ActiveBalls) {
-                                if (ball != null && ball.gameObject != null && ball.gameObject.activeInHierarchy) {
-                                    count++;
-                                }
-                            }
-                            if (count >= 2) {
-                                gameObject.SetActive(false);
-                            } else {
-                                GameManager.Instance.RemoveAndReturnToMostRecentCentralRoom();
-                            }
-                        } else {
-                            Debug.Log($"GOING DOWN: Moving from board {GameManager.currentBoard} (z={currentZ}) to {i} (z={(int)target.z}), zeros in between: {zeroCount}");
-                            GameManager.currentBoard = i; // Valid move, update Current Board
-
-                            // Add currentBoard to RoomHistory
-                            if (!GameManager.RoomHistory.Contains(GameManager.currentBoard)) {
-                                GameManager.RoomHistory.Push(GameManager.currentBoard);
-                            }
-
-                            paddleMove.currentYPos -= 10;
-                            paddleMove.baseYPos -= 10;
-                            paddleMove.maxFlipHeight -= 10;
-                        }
-                        break;
+                GameObject roomBelowObj = GameManager.levelLayers[GameManager.currentBoardRow - 1, GameManager.currentBoardColumn];
+                if (roomBelowObj != null)
+                {
+                    LocalRoomData roomBelowData = roomBelowObj.GetComponent<LocalRoomData>();
+                    if (roomBelowData != null && roomBelowData.localRoomData.y > 0)
+                    {
+                        // Room below has Y > 0, destroy the ball
+                        Debug.Log("Ball destroyed - room below has Y > 0");
+                        Destroy(gameObject);
+                        return;
                     }
                 }
+
+                GameManager.isTransitioning = true;
+                Debug.Log("GOING DOWN");
+
+                GameManager.currentBoardRow -= 1;
+                paddleMove.baseYPos -= 10;
+                paddleMove.currentYPos -= 10;
+                paddleMove.maxFlipHeight -= 10;
+
+                Vector2 roomBelow = new Vector2(GameManager.currentBoardColumn, GameManager.currentBoardRow);
+                UpdateRoomHistory(roomBelow);
+                GameManager.isTransitioning = false;
+            } else
+            {
+                Destroy(gameObject);
             }
         }
-
-        // Reset position if vertically out of bounds
-        if (transform.position.y > paddleMove.baseYPos + 10 && GameManager.currentBoard == boardCount - 1 && !GameManager.isShiftingDown) {
-            transform.position = new Vector3(0, GameManager.levelLayers[GameManager.currentBoard].transform.position.y);
-            moveDir.y = -1;
-            moveDir.x = 0;
-        }
-        
-        // If outside of current board's left & right walls, reset back to center
-        float offset = GameManager.levelLayers[currentBoard].GetComponent<LocalRoomData>().localLevelData.x;
-        if ((transform.position.x >= ((offset + 8.3f) + (24.26f * GameManager.currentColumn)) || transform.position.x <= ((-offset - 8.3f) + (24.26f * GameManager.currentColumn))) && !GameManager.ceilinigDestroyed) {
-            transform.position = new Vector3(GameManager.levelLayers[GameManager.currentBoard].transform.position.x, 0f);
+        // Reset position if Vertically out of bounds - Only allow if roof is NOT scrolling
+        if (transform.position.y > paddleMove.baseYPos + 10 && GameManager.currentBoardRow == totalRows - 1 && !GameManager.isShiftingDown && !GameManager.isTransitioning) {
+            transform.position = new Vector3(0, currentLayer.transform.position.y);
             moveDir.y = -1;
             moveDir.x = 0;
         }
 
-        var levelLayer = GameManager.levelLayers[GameManager.currentBoard];
-        Transform blockListTransform = levelLayer.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name.StartsWith("BlockList"));
+        // EARLY RETURN FOR ROOF SCROLLING - After handling upward rebound
+        if (GameManager.isShiftingDown) {
+            return; // Don't process horizontal transitions during roof scroll
+        }
 
+        float roomCenterX = currentLayer.transform.position.x;
+        float roomHalfWidth = 7.3f + roomData.localRoomData.x;
+
+        // If outside of Horizontally out of bounds - Right Side
+        if ((transform.position.x >= roomCenterX + roomHalfWidth + 1f) && !GameManager.ceilinigDestroyed) {
+            // FREEZE THE BALL FOR BOUNDARY TRANSITIONS TOO
+            isHorizontalTransitioning = true;
+
+            // If roof is moving, cancel it
+            if (GameManager.isShiftingDown) {
+                Debug.Log("[boardTransition] Canceling roof scroll for right transition");
+                //GameManager.CancelRoofTransition();
+                GameManager.needsFastRoofScroll = true;
+                GameManager.lastHorizontalTransitionTime = Time.time;
+            }
+
+            if (!GameManager.isTransitioning) {
+                transform.position = new Vector3(roomCenterX, transform.position.y);
+                moveDir.y = -1;
+                moveDir.x = 0;
+            } else if (GameManager.currentBoardColumn < 2) {
+                GameManager.currentBoardColumn++;
+                // --- TELEPORT THE PADDLE ---
+                if (paddleMove != null) {
+                    GameObject newRoom = GameManager.levelLayers[GameManager.currentBoardRow, GameManager.currentBoardColumn];
+                    Transform leftWall = null;
+                    Transform rightWall = null;
+
+                    foreach (Transform child in newRoom.transform) {
+                        if (child.name.StartsWith("LWall")) leftWall = child;
+                        else if (child.name.StartsWith("RWall")) rightWall = child;
+                    }
+
+                    if (leftWall != null && rightWall != null) {
+                        roomCenterX = (leftWall.position.x + rightWall.position.x) / 2f;
+                        paddleMove.transform.position = new Vector3(roomCenterX, paddleMove.currentYPos, 0f);
+                    }
+
+                    Vector2 roomToTheSide = new Vector2(GameManager.currentBoardColumn, GameManager.currentBoardRow);
+                    UpdateRoomHistory(roomToTheSide);
+                }
+            }
+
+            // Set preset direction based on which side we're transitioning from
+            if (transform.position.x >= roomCenterX + roomHalfWidth + 1f) { // Right side transition
+                moveDir = new Vector2(-0.5f, 1f);
+            } else { // Left side transition
+                moveDir = new Vector2(0.5f, 1f);
+            }
+            // Reset speed to normal
+            currentSpeed = targetSpeed;
+        }
+
+        if ((transform.position.x <= roomCenterX - roomHalfWidth - 1f) && !GameManager.ceilinigDestroyed) { // Left Side
+            // FREEZE THE BALL FOR BOUNDARY TRANSITIONS TOO
+            isHorizontalTransitioning = true;
+
+            // If roof is moving, cancel it
+            if (GameManager.isShiftingDown) {
+                Debug.Log("[boardTransition] Canceling roof scroll for left transition");
+                //GameManager.CancelRoofTransition();
+            }
+
+            if (!GameManager.isTransitioning) {
+                transform.position = new Vector3(roomCenterX, transform.position.y);
+                moveDir.y = -1;
+                moveDir.x = 0;
+            } else if (GameManager.currentBoardColumn > 0) {
+                GameManager.currentBoardColumn--;
+                // --- TELEPORT THE PADDLE ---
+                if (paddleMove != null) {
+                    GameObject newRoom = GameManager.levelLayers[GameManager.currentBoardRow, GameManager.currentBoardColumn];
+                    Transform leftWall = null;
+                    Transform rightWall = null;
+
+                    foreach (Transform child in newRoom.transform) {
+                        if (child.name.StartsWith("LWall")) leftWall = child;
+                        else if (child.name.StartsWith("RWall")) rightWall = child;
+                    }
+
+                    if (leftWall != null && rightWall != null) {
+                        roomCenterX = (leftWall.position.x + rightWall.position.x) / 2f;
+                        paddleMove.transform.position = new Vector3(roomCenterX, paddleMove.currentYPos, 0f);
+                    }
+
+                    Vector2 roomToTheSide = new Vector2(GameManager.currentBoardColumn, GameManager.currentBoardRow);
+                    UpdateRoomHistory(roomToTheSide);
+                }
+            }
+            // Set preset direction based on which side we're transitioning from
+            if (transform.position.x >= roomCenterX + roomHalfWidth + 1f) { // Right side transition
+                moveDir = new Vector2(-0.5f, 1f);
+            } else { // Left side transition
+                moveDir = new Vector2(0.5f, 1f);
+            }
+            // Reset speed to normal
+            currentSpeed = targetSpeed;
+        }
+
+        // --- Update brick container while ignoring Z3 bricks ---
+        Transform blockListTransform = currentLayer.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name.StartsWith("BlockList"));
         if (blockListTransform != null) {
             GameManager.brickContainer = blockListTransform.gameObject;
+        }
+    }
+
+    private void UpdateRoomHistory(Vector2 newRoom) {
+        if (GameManager.RoomHistory == null) {
+            GameManager.RoomHistory = new Queue<Vector2>();
+        }
+        // Keep only the last 2 rooms
+        if (GameManager.RoomHistory.Count >= 2) {
+            GameManager.RoomHistory.Dequeue();
+        }
+        // Add new room if it's different from the most recent
+        if (GameManager.RoomHistory.Count == 0 || GameManager.RoomHistory.Last() != newRoom) {
+            GameManager.RoomHistory.Enqueue(newRoom);
+            Debug.Log($"[Room History] Added room [{newRoom.x}, {newRoom.y}]. Count: {GameManager.RoomHistory.Count}");
         }
     }
     #endregion
 
 
     #region Collisions
-    private void CheckPaddleCollision()
-    {
+    private void CheckPaddleCollision() {
         bool inVerticalRange = transform.position.y < paddle.transform.position.y + 0.13f && transform.position.y > paddle.transform.position.y - 0.13f;
         bool inHorizontalRange = transform.position.x > paddle.transform.position.x - paddle.transform.localScale.x / 2.2f && transform.position.x < paddle.transform.position.x + paddle.transform.localScale.x / 2.2f;
         //Debug.Log("Between: " + (paddle.transform.position.x - paddle.transform.localScale.x / 2.2f) + " & " + paddle.transform.position.x + paddle.transform.localScale.x / 2.2f);
 
-        if (inVerticalRange && inHorizontalRange && moveDir.y == -1)
-        {
+        if (inVerticalRange && inHorizontalRange && moveDir.y == -1) {
             //Debug.Log("Collided with: Paddle");
-            if (transform.position.x > paddle.transform.position.x - paddle.transform.localScale.x / 2.9f && transform.position.x < paddle.transform.position.x + paddle.transform.localScale.x / 2.9f)
-            {
-                if (paddle.GetComponent<PaddleMove>().grabPaddle /*&& paddle.transform.position.y <= -4f*/ && !paddle.GetComponent<PaddleMove>().flipping)
-                {
+            if (transform.position.x > paddle.transform.position.x - paddle.transform.localScale.x / 2.9f && transform.position.x < paddle.transform.position.x + paddle.transform.localScale.x / 2.9f) {
+                if (paddle.GetComponent<PaddleMove>().grabPaddle /*&& paddle.transform.position.y <= -4f*/ && !paddle.GetComponent<PaddleMove>().flipping) {
                     isStuckToPaddle = true;
                     stickTarget = paddle.transform;
                     stickOffsetX = transform.position.x - paddle.transform.position.x;
                     stickOffsetY = offset; // Maintain the same vertical spacing
                 }
             }
-
             paddleOffsetX = transform.position.x - paddle.transform.position.x;
             PaddleBounce();
         }
     }
 
-    private void CheckDeathPlane()
-    {
-        if (transform.position.y <= deathPlane)
-        {
+    private void CheckDeathPlane() {
+        if (transform.position.y <= deathPlane && !GameManager.isShiftingDown && !GameManager.isTransitioning) {
             Destroy(gameObject);
         }
     }
 
-    private void bounceCheck()
-    {
-        var roomData = GameManager.levelLayers[GameManager.currentBoard]
-            .GetComponent<LocalRoomData>().localLevelData;
+    private void bounceCheck() {
+        GameObject currentLayer = GameManager.GetCurrentLayer();
+        if (currentLayer == null) return;
 
-        // Half-width of this room (room width + wall thickness)
-        float halfWidth = roomData.x + 7.3f;
+        LocalRoomData roomData = currentLayer.GetComponent<LocalRoomData>();
+        if (roomData == null) return;
 
-        // Spacing between main and side boards (from LevelBuilder)
-        float spacing = 23.6f;
+        // Use the room's actual position for boundary calculation
+        Vector3 roomPosition = currentLayer.transform.position;
+        float halfWidth = roomData.localRoomData.x + 7.3f;
 
-        // Horizontal offset based on which column we’re in
-        float columnOffset = spacing * GameManager.currentColumn;
+        // Boundaries relative to the room's center position
+        float leftBoundary = roomPosition.x - halfWidth;
+        float rightBoundary = roomPosition.x + halfWidth;
 
-        // Boundaries relative to the column’s center
-        float rightBoundary = columnOffset + halfWidth;
-        float leftBoundary = columnOffset - halfWidth;
-
-        if (transform.position.x >= rightBoundary || transform.position.x <= leftBoundary)
-        {
-            Debug.Log($"Bounce! posX={transform.position.x}, bounds=({leftBoundary}, {rightBoundary}), col={GameManager.currentColumn}, halfWidth={halfWidth}");
+        if (transform.position.x >= rightBoundary || transform.position.x <= leftBoundary) {
+            Debug.Log($"Bounce! posX={transform.position.x}, bounds=({leftBoundary}, {rightBoundary}), roomPosX={roomPosition.x}");
             bounce(true);
         }
     }
 
-    public void HandleRoofCollision()
-    {
+    public void HandleRoofCollision() {
+        // Count active balls
         int activeBallCount = 0;
-        foreach (var ball in GameManager.ActiveBalls)
-        {
-            if (ball != null && ball.gameObject != null && ball.gameObject.activeInHierarchy)
-            {
+        foreach (var ball in GameManager.ActiveBalls) {
+            if (ball != null && ball.gameObject != null && ball.gameObject.activeInHierarchy) {
                 activeBallCount++;
             }
         }
 
-        if (GameManager.currentColumn != 0)
-        {
-            if (activeBallCount > 1)
-            {
-                gameObject.SetActive(false);
-            }
-            else
-            {
-                GameManager.Instance.RemoveAndReturnToMostRecentCentralRoom();
-            }
+        // Get the current board GameObject
+        GameObject currentBoard = GameManager.GetLayer(GameManager.currentBoardRow, GameManager.currentBoardColumn);
+        if (currentBoard == null) {
+            Debug.LogWarning("No current board found.");
+            return;
         }
-        else
-        {
+
+        // Read its localRoomData.z value
+        LocalRoomData roomData = currentBoard.GetComponent<LocalRoomData>();
+        float boardZ = roomData != null ? roomData.localRoomData.z : 0f;
+
+        // Get the first digit of the absolute value of Z
+        float absZ = Mathf.Abs(boardZ);
+        while (absZ >= 10f) absZ /= 10f;
+        int firstDigit = (int)Mathf.Floor(absZ);
+
+        bool zStartsWithOne = firstDigit == 1;
+
+        if (zStartsWithOne) {
+            if (activeBallCount > 1) {
+                gameObject.SetActive(false);
+            } else {
+                GameManager.Instance.StartCoroutine(GameManager.Instance.RemoveCurrentBoard(1));
+            }
+        } else {
             Debug.Log("HIT ROOF SHOULD DESTROY");
             Destroy(gameObject);
         }
     }
 
+
     private void OnCollisionEnter2D(Collision2D collision) {
-
+        GameObject currentLayer = GameManager.GetCurrentLayer();
+        if (currentLayer == null) return;
         if (collision.contactCount == 0 || collisionProcessedThisFrame) return;
-
         collisionProcessedThisFrame = true;
 
         ContactPoint2D contact = collision.GetContact(0);
         Vector2 normal = contact.normal;
         float angle = Vector2.Angle(normal, Vector2.up);
 
+        // RoofPiece collision check
+        if (collision.gameObject.name.StartsWith("RoofPiece")) {
+            Transform boardTransform = collision.transform.parent; // RoofPiece parent = Board
 
+            if (boardTransform != null && boardTransform.gameObject != currentLayer) {
+                // Use the collider bounds for more reliable Y check
+                BoxCollider2D roofCollider = collision.collider as BoxCollider2D;
+                float roofTopY = roofCollider != null ? roofCollider.bounds.max.y : collision.transform.position.y;
 
-        if (collision.gameObject.name.EndsWith("Roof") && transform.position.y > collision.transform.position.y + 0.5f) { // Change "Roof" to whatever object destroys balls
-            Debug.Log("HIT ROOF");
-            // Check if roof belongs to current environ by checking hierarchy
-            Transform parentCheck = collision.transform.parent.parent;
-            while (parentCheck != null) {
-                Debug.Log("HIT ROOF: Roof hit: " + parentCheck.gameObject + " VS " + GameManager.levelLayers[GameManager.currentBoard] + " " + GameManager.currentBoard);
-                if (parentCheck.gameObject != GameManager.levelLayers[GameManager.currentBoard]) {
-                    Debug.Log("HIT ROOF SHOULD DESTROY. Board is: " + GameManager.currentBoard);
+                float tolerance = 0.15f; // small buffer for floating-point / physics imprecision
+                if (transform.position.y >= roofTopY - tolerance) {
+                    Debug.Log("HIT ROOF from previous board: " + boardTransform.name);
                     HandleRoofCollision();
-                    break;
                 }
-                parentCheck = parentCheck.parent;
             }
-
-            
         }
 
-
-
-        if (collision.gameObject.CompareTag("Block") || collision.gameObject.CompareTag("Brick"))
-        {
+        if (collision.gameObject.CompareTag("Block") || collision.gameObject.CompareTag("Brick")) {
             HandleBlockCollision(collision.gameObject);
         }
-        if (!collision.gameObject.CompareTag("Player") && (!collision.gameObject.CompareTag("Brick") || !GameManager.BrickThu))
-        {
+        if (!collision.gameObject.CompareTag("Player") && (!collision.gameObject.CompareTag("Brick") || !GameManager.BrickThu)) {
             HandleBouncePhysics(angle, collision.gameObject);
         }
-        if (gameObject.activeInHierarchy)
-        {
+        if (gameObject.activeInHierarchy) {
             StartCoroutine(ResetCollisionFlag());
         }
     }
 
-    private void OnTriggerEnter2D(Collider2D collision)
-    {
-        if (collision.gameObject.CompareTag("XTransition") && !GameManager.IsGameStart && !isStuckToPaddle)
-        {
+    private void OnTriggerEnter2D(Collider2D collision) {
+        if (collision.gameObject.CompareTag("XTransition") && !GameManager.IsGameStart && !isStuckToPaddle) {
             Debug.Log("Hitting XTrans");
+
+            // FREEZE THE BALL IMMEDIATELY FOR HORIZONTAL TRANSITION
+            isHorizontalTransitioning = true;
+
+            // CANCEL ROOF SCROLL HERE - This is the key fix!
+            if (GameManager.isShiftingDown) {
+                Debug.Log("[XTransition] Canceling roof scroll before horizontal transition");
+                //GameManager.CancelRoofTransition();
+            }
+
+            // MARK THAT WE NEED FAST SCROLLING AFTER HORIZONTAL TRANSITION
+            GameManager.needsFastRoofScroll = true;
+            GameManager.lastHorizontalTransitionTime = Time.time;
+
+            GameManager.isTransitioning = true;
+            Debug.Log("[HRT]: " + GameManager.isTransitioning);
+
+            LocalRoomData roomData = GameManager.GetCurrentLayer().GetComponent<LocalRoomData>();
+            Debug.Log("[CASE 3] XTrans triggered. Pre-Brick Count == " + roomData.numberOfBricks);
 
             XTransition currentTrans = collision.gameObject.GetComponent<XTransition>();
             GameObject partner = currentTrans.partnerTransition;
-
-            if (currentTrans == null)
-            {
-                Debug.LogWarning("No XTransition component found.");
-                return;
-            }
-            if (partner == null)
-            {
-                Debug.LogWarning("No partner transition assigned.");
-                return;
-            }
-
-            // Update currentColumn to reflect where we're going
+            if (currentTrans == null || partner == null) return;
+            
             int destinationColumn = (int)currentTrans.transition;
-            GameManager.currentColumn = destinationColumn;
+            Debug.Log("destinationColumn: " + destinationColumn + ", currentTrans: " + currentTrans + ", partner: " + partner);
 
-            // Update currentBoard to the board that contains the partner transition
-            for (int i = 0; i < GameManager.levelLayers.Count; i++)
-            {
-                if (partner.transform.IsChildOf(GameManager.levelLayers[i].transform))
-                {
-
-                    if (currentTrans.transition != 0)
-                    {
-                        GameManager.lastMainBoard = GameManager.currentBoard;
-                        Debug.Log("Last Main board: " + GameManager.lastMainBoard + ", Current Board pretrans: " + GameManager.currentBoard);
+            // Properly find which room contains the partner transition
+            bool foundPartner = false;
+            for (int row = 0; row < GameManager.levelLayers.GetLength(0); row++) {
+                for (int col = 0; col < GameManager.levelLayers.GetLength(1); col++) {
+                    GameObject layer = GameManager.levelLayers[row, col];
+                    if (layer != null && partner.transform.IsChildOf(layer.transform)) {
+                        GameManager.currentBoardRow = row;
+                        GameManager.currentBoardColumn = col;
+                        foundPartner = true;
+                        Debug.Log($"Found partner at [{row}, {col}]");
+                        break;
                     }
-                    GameManager.currentBoard = i;
-                    if (currentTrans.transition == 0)
-                    {
-                        GameManager.lastMainBoard = GameManager.currentBoard;
-                    }
-                    break;
                 }
+                if (foundPartner) break;
             }
 
-            Debug.Log("Now in column: " + GameManager.currentColumn + " and board index: " + GameManager.currentBoard);
+            if (!foundPartner) {
+                isHorizontalTransitioning = false;
+                return;
+            }
 
-            // Positioning the ball based on direction
-            if (transform.position.x < partner.transform.position.x)
-            { // Coming from left
+            Debug.Log("Now in Position: [" + GameManager.currentBoardRow + ", " + GameManager.currentBoardColumn + "]");
+            roomData = GameManager.GetCurrentLayer().GetComponent<LocalRoomData>();
+            Debug.Log("[CASE 3] XTrans triggered. Post-Brick Count == " + roomData.numberOfBricks);
+
+            // --- TELEPORT THE BALL ---
+            if (transform.position.x < partner.transform.position.x) { // Coming from left
                 transform.position = new Vector3(partner.transform.position.x + 1f, partner.transform.position.y, 0f);
-                moveDir.y = 1f;
-                moveDir.x = 0.5f;
-            }
-            else
-            { // Coming from right
+                moveDir = new Vector2(0.5f, 1f); // Set the preset direction
+            } else { // Coming from right
                 transform.position = new Vector3(partner.transform.position.x - 1f, partner.transform.position.y, 0f);
-                moveDir.y = 1f;
-                moveDir.x = -0.5f;
+                moveDir = new Vector2(-0.5f, 1f); // Set the preset direction
             }
-
             Debug.Log("Warped ball to: " + transform.position);
 
-            // THEN push the updated currentBoard reference
-            if ((int)currentTrans.transition != 0) { // When going to side rooms
-                if (GameManager.RoomHistory == null) {
-                    GameManager.RoomHistory = new Stack<int>();
+            // --- TELEPORT THE PADDLE ---
+            PaddleMove paddleMove = paddle.GetComponent<PaddleMove>();
+            if (paddleMove != null) {
+                GameObject newRoom = GameManager.levelLayers[GameManager.currentBoardRow, GameManager.currentBoardColumn];
+                Transform leftWall = null;
+                Transform rightWall = null;
+
+                foreach (Transform child in newRoom.transform) {
+                    if (child.name.StartsWith("LWall")) leftWall = child;
+                    else if (child.name.StartsWith("RWall")) rightWall = child;
                 }
 
-                if (!GameManager.RoomHistory.Contains(GameManager.currentBoard)) {
-                    GameManager.RoomHistory.Push(GameManager.currentBoard);
-                    Debug.Log($"[Room History] Pushed room {GameManager.currentBoard} to history stack. Stack count: {GameManager.RoomHistory.Count}");
-                } else {
-                    Debug.Log($"[Room History] Room {GameManager.currentBoard} already exists in history, skipping push.");
+                if (leftWall != null && rightWall != null) {
+                    float roomCenterX = (leftWall.position.x + rightWall.position.x) / 2f;
+                    paddleMove.transform.position = new Vector3(roomCenterX, paddleMove.currentYPos, 0f);
                 }
-            } else if ((int)currentTrans.transition == 0) { // When returning to main room
-                if (GameManager.RoomHistory != null && GameManager.RoomHistory.Count > 0) {
-                    while (GameManager.RoomHistory.Count > 1) {
-                        int poppedRoom = GameManager.RoomHistory.Pop();
-                    }
-                    GameManager.RoomHistory.Push(GameManager.currentBoard);
-                } else {
-                    Debug.Log("[DEBUG] RoomHistory is empty or null, nothing to pop");
-                }
-            } else {
-                Debug.Log($"[DEBUG] Unexpected transition value: {(int)currentTrans.transition}");
             }
+
+            // --- RoomHistory management ---
+            if (GameManager.RoomHistory == null) {
+                GameManager.RoomHistory = new Queue<Vector2>();
+            }
+
+            Vector2 currentRoom = new Vector2(GameManager.currentBoardColumn, GameManager.currentBoardRow);
+
+            // Keep only the last 2 rooms (current and previous)
+            if (GameManager.RoomHistory.Count >= 2) { // Remove oldest room to maintain size of 2
+                GameManager.RoomHistory.Dequeue();
+            }
+
+            // Add current room if it's different from the most recent
+            if (GameManager.RoomHistory.Count == 0 || GameManager.RoomHistory.Last() != currentRoom) {
+                GameManager.RoomHistory.Enqueue(currentRoom);
+                Debug.Log($"[Room History] Added room [{currentRoom.x}, {currentRoom.y}]. Count: {GameManager.RoomHistory.Count}");
+            } else {
+                Debug.Log($"[Room History] Room {currentRoom} already most recent, skipping add.");
+            }
+            
+            GameManager.isTransitioning = false;
+
+
+            // START COROUTINE TO UNFREEZE WHEN CAMERA CATCHES UP
+            isHorizontalTransitioning = false;
+            Debug.Log("[HRT]: " + GameManager.isTransitioning);
         }
     }
     
@@ -641,7 +701,9 @@ public class BallMovement : MonoBehaviour {
     #region Bounce / Collision Helpers
     private void bounce(bool horizontal) {
         //Debug.Log("Collided with: Bounce Function");
-        GameManager.Instance.PlaySFX(GameManager.Instance.ballBounceSound);
+        if (!GameManager.isTransitioning) {
+            GameManager.Instance.PlaySFX(GameManager.Instance.ballBounceSound);
+        }
         if (horizontal) {
             moveDir.x *= -1;
         } else {

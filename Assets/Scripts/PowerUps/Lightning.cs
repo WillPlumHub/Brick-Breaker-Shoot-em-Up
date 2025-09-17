@@ -25,13 +25,10 @@ public class Lightning : MonoBehaviour {
         }
     }
 
-    private void ScoreSpawn(int score)
-    {
-        if (GameManager.Instance != null)
-        {
+    private void ScoreSpawn(int score) {
+        if (GameManager.Instance != null) {
             GameManager.CurrentScore += score;
             ScoreNumberController.instance.SpawnScore(score, transform.position);
-
             GameManager.CanSpawnBall = false;
         }
     }

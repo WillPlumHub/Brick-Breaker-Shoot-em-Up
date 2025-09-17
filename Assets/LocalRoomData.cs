@@ -5,9 +5,11 @@ using UnityEngine;
 
 public class LocalRoomData : MonoBehaviour {
 
-    public Vector4 localLevelData;
-    public int initialBoardPosition;
+    private GameObject brickContainer;
+    public Vector4 localRoomData;
+    public Vector2 initialRoomPosition;
     public int numberOfBricks = 0;
+    public int initialNumberOfBricks = 0;    
 
     void Start() {
         if (GameManager.currentLevelData == null) {
@@ -15,18 +17,29 @@ public class LocalRoomData : MonoBehaviour {
             return;
         }
 
-        if (GameManager.currentLevelData.LevelRooms == null) {
-            Debug.LogError("LevelRooms list is null!");
+        if (GameManager.currentLevelData.LevelRoomsInspector == null) {
+            Debug.LogError("LevelRoomsInspector list is null!");
             return;
         }
 
-        if (initialBoardPosition < 0 || initialBoardPosition >= GameManager.currentLevelData.LevelRooms.Count) {
-            Debug.LogError("initialBoardPosition out of range!");
+        int row = (int)initialRoomPosition.y;
+        int column = (int)initialRoomPosition.x;
+
+        // Add proper bounds checking
+        if (row < 0 || row >= GameManager.currentLevelData.LevelRoomsInspector.Count) {
+            Debug.LogError($"initialRoomPosition.y {row} out of range! Level has {GameManager.currentLevelData.LevelRoomsInspector.Count} rows.");
             return;
         }
-
-        //Debug.Log("LEVEL DATA: initialBP: " + initialBoardPosition + ", localLVLData: " + GameManager.currentLevelData.LevelRooms[initialBoardPosition]);
-        localLevelData = GameManager.currentLevelData.LevelRooms[initialBoardPosition];
+        if (column < 0 || column > 2) {
+            Debug.LogError("initialRoomPosition.x must be 0, 1, or 2!");
+            return;
+        }
+                
+        // Find this room’s BlockList once
+        Transform blockListTransform = GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name.StartsWith("BlockList"));
+        if (blockListTransform != null) {
+            brickContainer = blockListTransform.gameObject;
+        }
     }
 
     public void Update() {
@@ -34,40 +47,25 @@ public class LocalRoomData : MonoBehaviour {
     }
 
     public void CountBricks() {
-        
-        GameObject currentLayer = GameManager.levelLayers[GameManager.currentBoard];
-        if (currentLayer == null) {
-            Debug.LogError("levelLayers[" + GameManager.currentBoard + "] is null.");
-            return;
-        }
-
-        if (GameManager.brickContainer == null) {
-            Transform blockListTransform = currentLayer.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name.StartsWith("BlockList"));
-
-            if (blockListTransform != null) {
-                GameManager.brickContainer = blockListTransform.gameObject;
-            } else {
-                Debug.LogWarning("BlockList not found under " + currentLayer.name);
-            }
-        }
-
         numberOfBricks = 0;
-        if (GameManager.brickContainer == null) {
-            GameObject[] bricks = GameObject.FindGameObjectsWithTag("Brick");
-            foreach (GameObject brick in bricks) {
-                ObjHealth health = brick.GetComponent<ObjHealth>();
-                if (brick.activeInHierarchy && health != null && !health.Invincibility) {
+        if (brickContainer != null) {
+            foreach (Transform child in brickContainer.transform) {
+                ObjHealth health = child.GetComponent<ObjHealth>();
+                if (child.gameObject.activeInHierarchy && health != null && !health.Invincibility) {
                     numberOfBricks++;
                 }
             }
-            return;
+        } else {
+            // Fallback: search by tag, but still scoped to this room
+            foreach (ObjHealth health in GetComponentsInChildren<ObjHealth>()) {
+                if (health.gameObject.activeInHierarchy && !health.Invincibility) {
+                    numberOfBricks++;
+                }
+            }
         }
 
-        foreach (Transform child in GameManager.brickContainer.transform) {
-            ObjHealth health = child.GetComponent<ObjHealth>();
-            if (child.gameObject.activeInHierarchy && health != null && !health.Invincibility) {
-                numberOfBricks++;
-            }
+        if (initialNumberOfBricks == 0 || initialNumberOfBricks < numberOfBricks) {
+            initialNumberOfBricks = numberOfBricks;
         }
     }
 }

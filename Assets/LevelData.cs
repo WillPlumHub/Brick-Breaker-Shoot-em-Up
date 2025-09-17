@@ -1,117 +1,197 @@
-using System.Collections;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
+
+[System.Serializable]
+public class RoomRow {
+    public Vector4 leftRoom;    // Column 0  (x = wall offset, y = roof offset, z = transition height ratio 0–1)
+    public Vector4 mainRoom;    // Column 1
+    public Vector4 rightRoom;   // Column 2
+
+    public RoomRow(Vector4[] array = null) {
+        if (array != null && array.Length >= 3) {
+            leftRoom = array[0];
+            mainRoom = array[1];
+            rightRoom = array[2];
+        } else {
+            leftRoom = mainRoom = rightRoom = Vector3.zero;
+        }
+    }
+    public Vector4[] ToArray() => new[] { leftRoom, mainRoom, rightRoom };
+}
 
 [CreateAssetMenu(fileName = "LevelData", menuName = "LevelData/Create New LevelData")]
 public class LevelData : ScriptableObject {
-    // Level Name
     public string StageName;
-    
-    // Approx. Level Difficulty
     public int difficulty;
-    
-    // Level Description
-    public string description;
-    
-    // List of rooms in the level.
-    // Each Vector4 represents a room:
-    //      X = Wall's width offset
-    //      Y = Roof's height offset
-    //      Z = Side Room direction (-1 left, 0 main, 1 right). It's decimal determines the XTransition's height in the Main Room
-    //      W = 
-    public List<Vector4> LevelRooms;
+    [TextArea] public string description;
 
-    // Called automatically in the Editor when the ScriptableObject is modified
+    // Inspector-friendly grid (rows = progression steps; cols: left/main/right)
+    public List<RoomRow> LevelRoomsInspector = new List<RoomRow>();
+    // Optional original format if you still need it anywhere else
+    public List<Vector4[]> LevelRooms = new List<Vector4[]>();
+
     private void OnValidate() {
-        Validate(); // Remember to call boardStats.Validate(); whenever changing LevelRooms at runtime
+        Validate();
+        SyncLevelRooms();
     }
 
-    // Ensures LevelRooms follow rules for spacing, side room limits, and proper sequences
     public void Validate() {
-        int consecutiveSideRooms = 0;
-        Vector4 lastMainRoom = Vector4.zero;
+        for (int step = 0; step < LevelRoomsInspector.Count; step++) {
+            var row = LevelRoomsInspector[step] ?? new RoomRow();
+            LevelRoomsInspector[step] = row;
 
-        for (int i = 0; i < LevelRooms.Count; i++) {
-            Vector4 room = LevelRooms[i];
+            // --- Clamp values for each room ---
+            row.leftRoom = ClampRoom(row.leftRoom);
+            row.mainRoom = ClampRoom(row.mainRoom);
+            row.rightRoom = ClampRoom(row.rightRoom);
 
-            // Clamp room parameters to allowed ranges
-            room.x = Mathf.Clamp(room.x, -4.3f, 2.7f);   // Wall width offset
-            room.y = Mathf.Clamp(room.y, 0f, 100f);      // Roof height offset
-            room.z = Mathf.Clamp(room.z, -1.9f, 1.9f);
-            if (room.z > 1f && room.z < 1.2f) {
-                room.z = 1.2f;
-            } else if (room.z < -1f && room.z > -1.2f) {
-                room.z = -1.2f;
-            } else if (room.z > 0f && room.z < 1f) {
-                room.z = 1f;
-            } else if (room.z > -1f && room.z < 0f) {
-                room.z = -1f;
+            // Truncate W values according to ones-digit rule
+            row.leftRoom.w = TruncateWValue(row.leftRoom.w);
+            row.mainRoom.w = TruncateWValue(row.mainRoom.w);
+            row.rightRoom.w = TruncateWValue(row.rightRoom.w);
+
+            // First row must always have a main
+            /*if (step == 0 && row.mainRoom == Vector4.zero) {
+                row.mainRoom = new Vector4(0f, 0f, 0.1f, 0f);
+            }*/
+
+            
+
+
+
+
+            if (row.mainRoom.y > 0f) {
+                //row.mainRoom.z += (3 - ((int)Mathf.Floor(row.mainRoom.z)) % 10);
+                row.mainRoom.z = 3.1f;
+                row.leftRoom.z = 3.1f;
+                row.rightRoom.z = 3.1f;
             }
-            room.w = Mathf.Clamp(room.w, 0f, 5f);
+            if (row.leftRoom.y > 0f) {
+                //row.leftRoom.z += (3 - ((int)Mathf.Floor(row.leftRoom.z)) % 10);
+                row.mainRoom.z = 3.1f;
+                row.leftRoom.z = 3.1f;
+                row.rightRoom.z = 3.1f;
+            }
+            if (row.rightRoom.y > 0f) {
+                //row.rightRoom.z += (3 - ((int)Mathf.Floor(row.rightRoom.z)) % 10);
+                row.mainRoom.z = 3.1f;
+                row.leftRoom.z = 3.1f;
+                row.rightRoom.z = 3.1f;
+            }
 
-            //room.z = Mathf.Clamp(room.z, -1.64f, 1.64f); // Side direction & XTransition entrance height
-            LevelRooms[i] = room; // assign back at the end
-
-            // Track consecutive horizontal rooms
-            if (room.z != 0f) {
-
-                if (room.y > lastMainRoom.y) {
-                    room.y = lastMainRoom.y;
-                    Debug.LogWarning($"Room {i}: Side room Y value cannot be greater than preceding main room. Clamped to {lastMainRoom.y}.");
+            if (step == 0) {
+                if (row.mainRoom.z <= 0f) {
+                    row.mainRoom.z = 0.1f;
                 }
+                float decimalPart = row.mainRoom.z - Mathf.Floor(row.mainRoom.z);
+                if (Mathf.Approximately(decimalPart, 0f)) {
+                    row.mainRoom.z = Mathf.Floor(row.mainRoom.z) + 0.1f;
+                }
+                row.mainRoom.z = Mathf.Clamp(row.mainRoom.z, 0.1f, 3.9f);
+            }
 
-                consecutiveSideRooms++;
-                // Prevent more than 2 Side Rooms in a row
-                if (consecutiveSideRooms > 2) {
-                    Debug.LogWarning($"Room {i}: More than 2 consecutive horizontal (z != 0) rooms � forcing z = 0.");
-                    room.z = 0f; // Force a Main Room
-                    consecutiveSideRooms = 0; // Then reset
+            // Prevent fully empty rows in the middle of a level
+            int filledCount = CountNonZero(row.ToArray());
+            if (filledCount == 0 && step > 0 && step < LevelRoomsInspector.Count - 1) {
+                // auto-inject a minimal main to block an illegal empty row
+                row.mainRoom = new Vector4(0f, 0f, 0.1f, 0f);
+            }
+
+            // Force W=0 if no valid room directly above (z == 0 means room doesn’t exist)
+            if (step < LevelRoomsInspector.Count - 1) {
+                var above = LevelRoomsInspector[step + 1];
+                if (above != null) {
+                    if (above.leftRoom.z == 0f) row.leftRoom.w = 0f;
+                    if (above.mainRoom.z == 0f) row.mainRoom.w = 0f;
+                    if (above.rightRoom.z == 0f) row.rightRoom.w = 0f;
+                } else {
+                    // Above row itself is null, force all W=0
+                    row.leftRoom.w = 0f;
+                    row.mainRoom.w = 0f;
+                    row.rightRoom.w = 0f;
                 }
             } else {
-                consecutiveSideRooms = 0; // reset on Main Room
-                lastMainRoom = room;
+                // Top row has nothing above
+                row.leftRoom.w = 0f;
+                row.mainRoom.w = 0f;
+                row.rightRoom.w = 0f;
             }
-            // Save the adjusted room back into the list
-            LevelRooms[i] = room;
+        }
+    }
+
+    private Vector4 ClampRoom(Vector4 room) {
+        room.x = Mathf.Clamp(room.x, -4.3f, 2.7f); // wall offset
+        room.y = Mathf.Clamp(room.y, 0f, 100f);    // roof offset
+        room.z = Mathf.Clamp(room.z, 0f, 3.9f);    // transition height ratio
+        if (room.z > 0f && room.z < 0.2f) room.z = 0.1f;
+        room.w = Mathf.Clamp(room.w, 0f, 100000f); // custom (free to define!)
+        return room;
+    }
+
+    private int CountNonZero(Vector4[] row) {
+        int count = 0;
+        foreach (var r in row) {
+            if (r != Vector4.zero) count++;
+        }
+        return count;
+    }
+
+    private void SyncLevelRooms() {
+        LevelRooms.Clear();
+        foreach (var row in LevelRoomsInspector) {
+            LevelRooms.Add(row.ToArray());
+        }
+    }
+
+    public void InitializeFromArrays() {
+        LevelRoomsInspector.Clear();
+        foreach (var arr in LevelRooms) {
+            LevelRoomsInspector.Add(new RoomRow(arr));
+        }
+        SyncLevelRooms();
+    }
+
+    public List<Vector4[]> GetLevelRoomsAsArrays() {
+        SyncLevelRooms();
+        return LevelRooms;
+    }
+
+    public static float TruncateWValue(float wValue) {
+        if (wValue == 0f) return 0f;
+
+        // Split integer and decimal parts
+        long intPart = (long)Mathf.Floor(wValue);
+        float decimalPart = Mathf.Abs(wValue - intPart);
+
+        string intStr = intPart.ToString();
+        int onesDigit = intStr[intStr.Length - 1] - '0'; // ones position
+        
+        // Determine how many digits can remain to the left of ones place
+        if (intStr.Length - 1 > onesDigit) {
+            Debug.Log("[W Fix] Trimming integer part from " + (intStr.Length - 1) + " to last " + onesDigit + " digits.");
+            intStr = intStr.Substring((intStr.Length - 1) - onesDigit);
         }
 
-        // Ensure no invalid sequences of side rooms occur
-        for (int i = 0; i < LevelRooms.Count - 1; i++) {
-            Vector4 currentRoom = LevelRooms[i];
-            Vector4 nextRoom = LevelRooms[i + 1];
-            
-            if (currentRoom.z == 0) {
-                lastMainRoom = currentRoom;
+        // Trim decimal part to at most "onesDigit" digits
+        string decStr = "";
+        if (decimalPart > 0f) {
+            string decimalFullStr = decimalPart.ToString("0.##########").Split('.')[1];
+            decStr = decimalFullStr;
+            if (decStr.Length -1 > onesDigit) {
+                decStr = decStr.Substring(0, onesDigit);
             }
+        }
 
-            if (currentRoom.z != 0 && currentRoom.y >= lastMainRoom.y) {
-                currentRoom.y = lastMainRoom.y;
-            }
+        // Recombine integer and decimal parts
+        string combined = intStr;
+        if (!string.IsNullOrEmpty(decStr)) {
+            combined += "." + decStr;
+        }
 
-            // Prevent starting with a side room
-            if (i == 0 && currentRoom.z != 0f) {
-                Debug.LogWarning($"Cannot start with a side room. Changed to a main room.");
-                nextRoom.z = 0f; // Change to a main room
-                LevelRooms[i] = nextRoom;
-            }
-            // Prevent two consecutive z = 1 rooms
-            if (currentRoom.z == 1f && nextRoom.z == 1f) {
-                Debug.LogWarning($"Rooms {i} and {i + 1}: Consecutive z = 1 rooms. Forcing a z = 0 in between.");
-                nextRoom.z = -1f; // Insert a Main Room between
-                LevelRooms[i + 1] = nextRoom;
-            }
-            // Prevent two consecutive z = -1 rooms
-            else if (currentRoom.z == -1f && nextRoom.z == -1f) {
-                Debug.LogWarning($"Rooms {i} and {i + 1}: Consecutive z = -1 rooms. Forcing a z = 0 in between.");
-                nextRoom.z = 0f; // Insert a Main Room between
-                LevelRooms[i + 1] = nextRoom;
-            }
-            // Ensure proper ordering: z = 1 must come before z = -1 if both appear consecutively
-            else if (currentRoom.z == -1f && nextRoom.z == 1f) {
-                Debug.LogWarning($"Rooms {i} and {i + 1}: z = -1 should not come before z = 1. Swapping.");
-                LevelRooms[i] = new Vector4(currentRoom.x, currentRoom.y, 1f, currentRoom.w);
-                LevelRooms[i + 1] = new Vector4(nextRoom.x, nextRoom.y, -1f, nextRoom.w);
-            }
+        if (float.TryParse(combined, out float result)) {
+            return result;
+        } else {
+            return wValue;
         }
     }
 }

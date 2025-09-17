@@ -20,7 +20,7 @@ public class PaddleBullet : MonoBehaviour {
     void Update() {
         transform.Translate(Vector2.up * speed * Time.deltaTime, Space.World);
 
-        if (transform.position.y >= 7f) {
+        if (transform.position.y >= paddle.GetComponent<PaddleMove>().baseYPos + 10f) {
             ReturnBulletToPaddle();
             Destroy(gameObject);
         }

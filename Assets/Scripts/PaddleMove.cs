@@ -43,7 +43,10 @@ public class PaddleMove : MonoBehaviour {
     public int bulletCount = 3;
     public bool grabPaddle = false;
     public bool anyBallStuck = false;
-        
+
+    [HideInInspector]
+    public bool isTransitioning = false;
+
     void Start() {
         GameManager.IsGameStart = true;
         // Initializing GameManager values in case they aren't already
@@ -57,26 +60,28 @@ public class PaddleMove : MonoBehaviour {
         maxFlipHeight = baseYPos + 0.5f;
         GameManager.IsGameStart = true;
         gameManager = GameObject.FindGameObjectWithTag("GameController").GetComponent<GameManager>();
-        UpdateXBoundary();
     }
 
     void Update() {
-        HandleInput();
-        PaddleMovement();
-        flip();
-        sizeUpdate();
+        if (!isTransitioning) {
+            HandleInput();
+            PaddleMovement();
+            flip();
+            sizeUpdate();
+        }
+        //InputCheck();
+    }
 
-        /*for (int i = 0; i <= 19; i++) {
+
+    #region Controller Management
+    public void InputCheck() {
+        for (int i = 0; i <= 19; i++) {
             if (Input.GetKeyDown((KeyCode)(330 + i))) {
                 Debug.Log("Joystick Button Pressed: " + i);
             }
-        }*/
+        }
     }
 
-    
-
-
-    #region Controller Managerment
     void DetectControlType() {
         if (Time.time - lastInputCheckTime < inputCheckCooldown) return;
 
@@ -200,59 +205,6 @@ public class PaddleMove : MonoBehaviour {
     #endregion
 
     #region Movement
-    void UpdateXBoundary() {
-        if (GameManager.levelLayers != null && GameManager.currentBoard < GameManager.levelLayers.Count) {
-            GameObject currentLayer = GameManager.levelLayers[GameManager.currentBoard];
-            LocalRoomData roomData = currentLayer.GetComponent<LocalRoomData>();
-
-            if (roomData == null) {
-                Debug.LogWarning("[Paddle XBoundry] No LocalRoomData found on current layer.");
-                return;
-            }
-            // Get the og X offset from the room data
-            float roomXOffset = roomData.localLevelData.x;
-
-            Transform leftWall = null;
-            Transform rightWall = null;
-
-            foreach (Transform child in currentLayer.transform) {
-                if (child.name.StartsWith("LWall")) {
-                    leftWall = child;
-                } else if (child.name.StartsWith("RWall")) {
-                    rightWall = child;
-                }
-            }
-
-            if (leftWall != null && rightWall != null) {
-                // The walls are already positioned with the room's X offset applied
-                // So we just need to find the center point between them
-                float centerX = (leftWall.position.x + rightWall.position.x) / 2f;
-                float halfDistance = Mathf.Abs(rightWall.position.x - leftWall.position.x) / 2f;
-
-                // The boundary is simply half the distance between the walls
-                // (the room X offset is already baked into the wall positions)
-                float baseHalfWidth = halfDistance;
-
-                // Apply size-based mod
-                float paddleScale = transform.localScale.x;
-                if (paddleScale < 1.12f) modf = 0.9698f;
-                else if (paddleScale < 1.666668f) modf = 0.986f;
-                else if (paddleScale < 2.51f) modf = 1f;
-                else if (paddleScale < 3.751f) modf = 1.02f;
-                else if (paddleScale < 5.6251f) modf = 1.045f;
-
-                // Apply the final boundary calculation
-                XBoundry = baseHalfWidth * modf - 0.2f;
-
-                //Debug.Log($"[Paddle XBoundry] Room X Offset: {roomXOffset}, Wall Positions: L={leftWall.position.x}, R={rightWall.position.x}, " + $"Half Distance: {halfDistance}, Mod: {modf}, XBoundry: {XBoundry}");
-            } else {
-                Debug.LogWarning("[Paddle XBoundry] Could not find walls in current level layer.");
-            }
-        } else {
-            Debug.LogWarning("[Paddle XBoundry] Invalid levelLayers reference or board index.");
-        }
-    }
-
     void OnTriggerEnter2D(Collider2D col) {
         if (col.gameObject.CompareTag("Lazer")) { // Disable on hit
             disableMovement = col.gameObject.GetComponent<Lazer>().disableTime;
@@ -260,52 +212,87 @@ public class PaddleMove : MonoBehaviour {
     }
 
     void PaddleMovement() {
-        UpdateXBoundary();
-        float targetX = transform.position.x;
-        float paddleWidth = transform.localScale.x;
-
         if (disableMovement > 0) {
             disableMovement -= Time.deltaTime;
             return;
         }
 
-        // Find the center of the current room
-        float roomCenterX = 0f;
-        if (GameManager.levelLayers != null && GameManager.currentBoard < GameManager.levelLayers.Count) {
-            GameObject currentLayer = GameManager.levelLayers[GameManager.currentBoard];
-            LocalRoomData roomData = currentLayer.GetComponent<LocalRoomData>();
-            if (roomData != null) {
-                Transform leftWall = null;
-                Transform rightWall = null;
-                foreach (Transform child in currentLayer.transform) {
-                    if (child.name.StartsWith("LWall")) leftWall = child;
-                    else if (child.name.StartsWith("RWall")) rightWall = child;
-                }
-                if (leftWall != null && rightWall != null) {
-                    roomCenterX = (leftWall.position.x + rightWall.position.x) / 2f;
-                }
+        if (GameManager.levelLayers == null || GameManager.currentBoardRow < 0 || GameManager.currentBoardRow >= GameManager.levelLayers.GetLength(0) || GameManager.currentBoardColumn < 0 || GameManager.currentBoardColumn >= GameManager.levelLayers.GetLength(1)) {
+            return;
+        }
+        GameObject currentLayer = GameManager.levelLayers[GameManager.currentBoardRow, GameManager.currentBoardColumn];
+        if (currentLayer == null) return;
+
+        // Find the actual wall positions in the scene (accounting for stretching)
+        Transform leftWall = null;
+        Transform rightWall = null;
+
+        foreach (Transform child in currentLayer.transform) {
+            if (child.name.StartsWith("LWall")) {
+                leftWall = child;
+            } else if (child.name.StartsWith("RWall")) {
+                rightWall = child;
             }
         }
+
+        float leftBoundary, rightBoundary;
+
+        if (leftWall != null && rightWall != null) { // Calculate boundaries: wall position + half wall width + half paddle width
+            float leftWallHalfWidth = leftWall.localScale.x / 2f;
+            float rightWallHalfWidth = rightWall.localScale.x / 2f;
+            float paddleHalfWidth = transform.localScale.x / 2f;
+
+            leftBoundary = leftWall.position.x + leftWallHalfWidth + paddleHalfWidth;
+            rightBoundary = rightWall.position.x - rightWallHalfWidth - paddleHalfWidth;
+        } else { // Fallback: use camera edges
+            float roomCenterX = currentLayer.transform.position.x;
+            float camHalfHeight = Camera.main.orthographicSize;
+            float camHalfWidth = camHalfHeight * Camera.main.aspect;
+            float paddleHalfWidth = transform.localScale.x / 2f;
+
+            leftBoundary = roomCenterX - camHalfWidth + paddleHalfWidth;
+            rightBoundary = roomCenterX + camHalfWidth - paddleHalfWidth;
+        }
+
+        // Paddle scale modifier (keep your existing logic)
+        float paddleScale = transform.localScale.x;
+        if (paddleScale < 0.5f) modf = 0.01f; // 0.4938271f
+        else if (paddleScale < 0.8f) modf = 0.05f; // 0.740740740...f
+        else if (paddleScale < 1.2f) modf = 0.1f; // 1.111...f
+        else if (paddleScale < 1.7f) modf = 0.2f; // 1.6666...f
+        else if (paddleScale < 2.51f) modf = 0.3f;    // Base, 2.5f
+        else if (paddleScale < 3.751f) modf = 0.45f; // 3.75f
+        else if (paddleScale < 5.6251f) modf = 0.65f; // 5.625f
+        else if (paddleScale < 8.4385f) modf = 1.0f; // 8.4375f
+        else if (paddleScale < 12.6563f) modf = 1.59f;// 12.65625f
+
+        float targetX = transform.position.x;
         switch (controlType) {
             case ControlType.Mouse:
                 mousePosition = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-                mousePosition.z = Camera.main.transform.position.z + Camera.main.nearClipPlane;
-                // Calculate position relative to room center
-                float mouseRelativeX = mousePosition.x - roomCenterX;
-                targetX = roomCenterX + Mathf.Clamp(mouseRelativeX, -XBoundry + (paddleWidth / 2), XBoundry - (paddleWidth / 2));
+                mousePosition.z = 0f;
+                targetX = Mathf.Clamp(mousePosition.x, leftBoundary - modf, rightBoundary + modf);
                 break;
+
             case ControlType.Keyboard:
             case ControlType.Gamepad:
                 moveInput = Input.GetAxisRaw("Horizontal");
                 float moveSpeed = 10f;
-                // Calculate position relative to room center
-                float currentRelativeX = transform.position.x - roomCenterX;
-                float newRelativeX = currentRelativeX + moveInput * (moveSpeed * mod) * Time.deltaTime;
-                newRelativeX = Mathf.Clamp(newRelativeX, -XBoundry + (paddleWidth / 2), XBoundry - (paddleWidth / 2));
-                targetX = roomCenterX + newRelativeX;
+                float newX = transform.position.x + moveInput * moveSpeed * mod * Time.deltaTime;
+                // Use the same clamping logic as mouse movement with modf adjustment
+                targetX = Mathf.Clamp(newX, leftBoundary - modf, rightBoundary + modf);
                 break;
         }
+
         transform.position = new Vector3(targetX, currentYPos, 0f);
+
+        if (Input.GetKeyDown(KeyCode.Space)) {
+            Debug.Log($"[XBOUNDRY] TargetX: {targetX}, LeftBound: {leftBoundary}, RightBound: {rightBoundary}");
+            if (leftWall != null && rightWall != null) {
+                Debug.Log($"[WALLS] LeftWallPos: {leftWall.position.x}, LeftWallWidth: {leftWall.localScale.x}");
+                Debug.Log($"[WALLS] RightWallPos: {rightWall.position.x}, RightWallWidth: {rightWall.localScale.x}");
+            }
+        }
     }
     #endregion
 
@@ -321,21 +308,17 @@ public class PaddleMove : MonoBehaviour {
             float range = Mathf.Clamp01(1f - (Mathf.Abs(ball.transform.position.x - transform.position.x) / magnetOffset)); // Check if given ball is within magnet range
             bool isWithinOffset = range > 0f;
 
-
-            /*if (ballMovement.isStuckToPaddle) {
-                //Debug.Log("Skipping stuck ball: " + ball.name);
-                continue;
-            }*/
-
-            //Debug.Log("Applying magnet to: " + ball.name);
-
-
             if (isWithinOffset) { // Actually activate the magnet effect
                 if (ballMovement.isStuckToPaddle || (ballMovement.stickTarget != null && ballMovement.stickTarget != gameObject)) {
                     ballMovement.ReleaseFromStick();
                 }
                 if (ballMovement.moveDir.y == 1) {
-                    ballMovement.currentSpeed -= decellerate;
+
+                    if (ballMovement.currentSpeed > 13.5f) {
+                        ballMovement.currentSpeed -= (decellerate/3);
+                    } else {
+                        ballMovement.currentSpeed -= decellerate;
+                    }   
                 } else if (ballMovement.moveDir.y == -1) {
                     ballMovement.currentSpeed += decellerate;
                 } else {
@@ -353,29 +336,32 @@ public class PaddleMove : MonoBehaviour {
 
     #region Power Ups
     void sizeUpdate() {
-        if (GameManager.levelLayers != null && GameManager.currentBoard < GameManager.levelLayers.Count) {
-            GameObject currentLayer = GameManager.levelLayers[GameManager.currentBoard];
+        GameObject currentLayer = GameManager.GetCurrentLayer();
+        if (currentLayer == null) return;
 
-            Transform leftWall = null;
-            Transform rightWall = null;
+        Transform leftWall = null;
+        Transform rightWall = null;
+        foreach (Transform child in currentLayer.transform) {
+            if (child.name.StartsWith("LWall")) {
+                leftWall = child;
+            } else if (child.name.StartsWith("RWall")) {
+                rightWall = child;
+            }
+        }
 
-            foreach (Transform child in currentLayer.transform) {
-                if (child.name.StartsWith("LWall")) {
-                    leftWall = child;
-                } else if (child.name.StartsWith("RWall")) {
-                    rightWall = child;
+        if (leftWall != null && rightWall != null) {
+            float leftWallHalfWidth = leftWall.localScale.x / 2f;
+            float rightWallHalfWidth = rightWall.localScale.x / 2f;
+            float playableWidth = Mathf.Abs((rightWall.position.x - rightWallHalfWidth) - (leftWall.position.x + leftWallHalfWidth));
+            Vector3 scale = transform.localScale;
+            while (scale.x > playableWidth - 0.5f && scale.x > 0.4938271f) {
+                scale.x /= 1.5f;
+                if (scale.x < 0.4938271f) {
+                    scale.x = 0.4938271f;
+                    break;
                 }
             }
-
-            if (leftWall != null && rightWall != null) {
-                float widthBetweenWalls = Mathf.Abs(rightWall.position.x - leftWall.position.x);
-                Vector3 scale = transform.localScale;
-                if (transform.localScale.x > widthBetweenWalls) {
-                    Debug.Log("Shrinking");
-                    scale.x /= 2;
-                    transform.localScale = scale;
-                }
-            }
+            transform.localScale = scale;
         }
     }
 
@@ -384,6 +370,50 @@ public class PaddleMove : MonoBehaviour {
             Instantiate(lazerPaddleProjectile, new Vector2(transform.position.x - transform.localScale.x / 3, transform.position.y + 0.13f), Quaternion.identity);
             Instantiate(lazerPaddleProjectile, new Vector2(transform.position.x + transform.localScale.x / 3, transform.position.y + 0.13f), Quaternion.identity);
             bulletCount-=2;
+        }
+    }
+    #endregion
+
+    #region Gizmos
+    void OnDrawGizmos() {
+        if (!Application.isPlaying) return;
+
+        DrawMagnetZone();
+        DrawEffectLines();
+    }
+
+    void DrawMagnetZone() {
+        Vector3 paddlePos = transform.position;
+        Gizmos.color = new Color(0f, 1f, 1f, 0.15f);
+
+        // Draw vertical rectangle edges
+        Vector3 topLeft = paddlePos + new Vector3(-magnetOffset, 10f, 0);
+        Vector3 topRight = paddlePos + new Vector3(magnetOffset, 10f, 0);
+        Vector3 bottomLeft = paddlePos + new Vector3(-magnetOffset, 0, 0);
+        Vector3 bottomRight = paddlePos + new Vector3(magnetOffset, 0, 0);
+
+        Gizmos.DrawLine(bottomLeft, topLeft);
+        Gizmos.DrawLine(bottomRight, topRight);
+        Gizmos.DrawLine(topLeft, topRight);
+        Gizmos.DrawLine(bottomLeft, bottomRight);
+    }
+
+    void DrawEffectLines() {
+        if (GameManager.ActiveBalls == null) return;
+
+        foreach (GameObject ball in GameManager.ActiveBalls) {
+            if (ball == null) continue;
+
+            if (ball.transform.position.y > transform.position.y) {
+                float horizontalDistance = Mathf.Abs(ball.transform.position.x - transform.position.x);
+
+                if (horizontalDistance < magnetOffset) {
+                    float range = Mathf.Clamp01(1f - (horizontalDistance / magnetOffset));
+                    Gizmos.color = Color.Lerp(Color.yellow, Color.red, range);
+
+                    Gizmos.DrawLine(ball.transform.position, transform.position);
+                }
+            }
         }
     }
     #endregion

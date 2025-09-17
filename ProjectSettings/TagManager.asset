@@ -11,6 +11,8 @@ TagManager:
   - Lazer
   - Brick
   - XTransition
+  - invisibleBrick
+  - BlockList
   layers:
   - Default
   - TransparentFX
