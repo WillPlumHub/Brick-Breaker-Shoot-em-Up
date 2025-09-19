@@ -9,7 +9,8 @@ public class LocalRoomData : MonoBehaviour {
     public Vector4 localRoomData;
     public Vector2 initialRoomPosition;
     public int numberOfBricks = 0;
-    public int initialNumberOfBricks = 0;    
+    public int initialNumberOfBricks = 0;
+    public GameObject Brick;
 
     void Start() {
         if (GameManager.currentLevelData == null) {
@@ -40,6 +41,11 @@ public class LocalRoomData : MonoBehaviour {
         if (blockListTransform != null) {
             brickContainer = blockListTransform.gameObject;
         }
+        
+        CountBricks();
+
+        StartCoroutine(DefaultBrick());
+
     }
 
     public void Update() {
@@ -66,6 +72,17 @@ public class LocalRoomData : MonoBehaviour {
 
         if (initialNumberOfBricks == 0 || initialNumberOfBricks < numberOfBricks) {
             initialNumberOfBricks = numberOfBricks;
+        }
+    }
+
+    public IEnumerator DefaultBrick() {
+        yield return new WaitForEndOfFrame();
+        yield return new WaitForEndOfFrame();
+        if ((int)localRoomData.z != 3 && initialNumberOfBricks == 0) {
+            Debug.Log("[Default Brick] Laid default brick");
+            Instantiate(Brick, transform.position, Quaternion.identity);
+        } else {
+            Debug.Log("[Default Brick] Bricks accounted for");
         }
     }
 }

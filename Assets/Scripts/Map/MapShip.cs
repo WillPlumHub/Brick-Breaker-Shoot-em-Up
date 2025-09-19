@@ -1,4 +1,5 @@
 ﻿using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class MapShip : MonoBehaviour {
@@ -16,6 +17,7 @@ public class MapShip : MonoBehaviour {
     public bool flipping = false;
     private float speedSmoothTime = 0.5f;
     private float movementSpeedTimer = 0f;
+    public bool disabled = false;
 
     [Header("Camera Follow")]
     public float cameraFollowSpeed = 5f;
@@ -41,6 +43,10 @@ public class MapShip : MonoBehaviour {
     private float inputCheckCooldown = 0.1f;
     private float lastInputCheckTime = 0f;
 
+    [Header("Magnet")]
+    public float strength = 10;
+    public float minRange = 1;
+
     void Start() {
         originalPosition = transform.position;
         targetPosition = originalPosition;
@@ -54,6 +60,7 @@ public class MapShip : MonoBehaviour {
         aboutFace();
         movement();
         cameraFollow();
+        AdjustTriggerToCameraEdges();
     }
 
     void DetectControlType() {
@@ -102,6 +109,8 @@ public class MapShip : MonoBehaviour {
         inputUp = flipUp;
         inputHeld = flipHeld;
 
+        IsRightClickPressed();
+        
         // --- Input Direction ---
         Vector2 direction = Vector2.zero;
 
@@ -125,7 +134,7 @@ public class MapShip : MonoBehaviour {
     }
 
     public void generalMove() {
-        if (inputDown && !LevelEntrance.playerInTrigger) {
+        if (inputDown && !disabled) {
             idleTimer = 0f;
             originalPosition = transform.position;
 
@@ -141,7 +150,7 @@ public class MapShip : MonoBehaviour {
         }
 
         // Start moving directly if in trigger and input is held
-        if (LevelEntrance.playerInTrigger && inputHeld && !flipping && !moving) {
+        if (disabled && inputHeld && !flipping && !moving) {
             idleTimer = 0f;
             movementSpeedTimer = 0f;
             moving = true;
@@ -215,5 +224,42 @@ public class MapShip : MonoBehaviour {
                 cameraTransform.position = Vector3.Lerp(cameraTransform.position, recenterPos, recenterSpeed * Time.deltaTime);
             }
         }
+    }
+
+    public void AdjustTriggerToCameraEdges() {
+        // Find trigger collider
+        BoxCollider2D triggerCollider = null;
+        foreach (var col in GetComponents<BoxCollider2D>()) {
+            if (col.isTrigger) { triggerCollider = col; break; }
+        }
+        if (triggerCollider == null) return;
+
+        // Camera bounds
+        float camHeight = 47.5f;
+        float camWidth = 120f;
+        Vector3 camPos = Camera.main.transform.position;
+
+        // Compute distances to each camera edge along forward
+        float distTop = Vector3.Dot((new Vector3(transform.position.x, camPos.y + camHeight, 0) - transform.position), transform.up.normalized);
+        float distBottom = Vector3.Dot((new Vector3(transform.position.x, camPos.y - camHeight, 0) - transform.position), transform.up.normalized);
+        float distRight = Vector3.Dot((new Vector3(camPos.x + camWidth, transform.position.y, 0) - transform.position), transform.up.normalized);
+        float distLeft = Vector3.Dot((new Vector3(camPos.x - camWidth, transform.position.y, 0) - transform.position), transform.up.normalized);
+
+        // Pick the maximum positive distance (forward)
+        float maxForwardDist = Mathf.Max(distTop, distBottom, distRight, distLeft, 0f);
+
+        // Apply to collider along local Y (forward)
+        triggerCollider.size = new Vector2(3f, maxForwardDist);
+        triggerCollider.offset = new Vector2(0f, maxForwardDist / 2f);
+    }
+    public bool IsRightClickPressed() {
+
+        bool MagnetPull = Input.GetMouseButton(1)
+            || Input.GetKey(KeyCode.JoystickButton3)
+            || Input.GetKey(KeyCode.JoystickButton0)
+            || Input.GetKey(KeyCode.JoystickButton7);
+
+        // Assuming you're checking for right mouse button
+        return MagnetPull;
     }
 }

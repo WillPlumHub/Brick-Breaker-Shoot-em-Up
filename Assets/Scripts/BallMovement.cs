@@ -206,13 +206,10 @@ public class BallMovement : MonoBehaviour {
         int totalRows = GameManager.levelLayers.GetLength(0);
 
         // BOUNCE DOWN if roof is scrolling and ball is too high
-        if (GameManager.isShiftingDown && transform.position.y > paddleMove.baseYPos + 9.35f)
-        {
+        if (transform.position.y > paddleMove.baseYPos + 9.38f && (GameManager.isShiftingDown || GameManager.levelLayers[GameManager.currentBoardRow + 1, GameManager.currentBoardColumn] == null)) {
             Debug.Log("[Rebounding] Rebounding now during roof scroll");
             moveDir.y = -1;
-        }
-        else if (transform.position.y > paddleMove.baseYPos + 10 && GameManager.currentBoardRow + 1 < totalRows && !GameManager.isShiftingDown)
-        { // Try to move UP a board (only if roof is NOT scrolling)
+        } else if (transform.position.y > paddleMove.baseYPos + 10 && GameManager.currentBoardRow + 1 < totalRows && !GameManager.isShiftingDown) { // Try to move UP a board (only if roof is NOT scrolling)
             GameManager.isTransitioning = true;
             Debug.Log("GOING UP");
 
@@ -224,19 +221,14 @@ public class BallMovement : MonoBehaviour {
             Vector2 roomAbove = new Vector2(GameManager.currentBoardColumn, GameManager.currentBoardRow);
             UpdateRoomHistory(roomAbove);
             GameManager.isTransitioning = false;
-        }
-        else if (transform.position.y < paddleMove.baseYPos - 1.1f && GameManager.currentBoardRow > 0)
-        { // Try to move DOWN a board - Only allow if roof is NOT scrolling
+        } else if (transform.position.y < paddleMove.baseYPos - 1.1f && GameManager.currentBoardRow > 0) { // Try to move DOWN a board - Only allow if roof is NOT scrolling
 
-            if (!GameManager.isShiftingDown)
-            {
+            if (!GameManager.isShiftingDown) {
 
                 GameObject roomBelowObj = GameManager.levelLayers[GameManager.currentBoardRow - 1, GameManager.currentBoardColumn];
-                if (roomBelowObj != null)
-                {
+                if (roomBelowObj != null) {
                     LocalRoomData roomBelowData = roomBelowObj.GetComponent<LocalRoomData>();
-                    if (roomBelowData != null && roomBelowData.localRoomData.y > 0)
-                    {
+                    if (roomBelowData != null && roomBelowData.localRoomData.y > 0) {
                         // Room below has Y > 0, destroy the ball
                         Debug.Log("Ball destroyed - room below has Y > 0");
                         Destroy(gameObject);
@@ -255,8 +247,7 @@ public class BallMovement : MonoBehaviour {
                 Vector2 roomBelow = new Vector2(GameManager.currentBoardColumn, GameManager.currentBoardRow);
                 UpdateRoomHistory(roomBelow);
                 GameManager.isTransitioning = false;
-            } else
-            {
+            } else {
                 Destroy(gameObject);
             }
         }
@@ -461,15 +452,22 @@ public class BallMovement : MonoBehaviour {
 
         // Read its localRoomData.z value
         LocalRoomData roomData = currentBoard.GetComponent<LocalRoomData>();
-        float boardZ = roomData != null ? roomData.localRoomData.z : 0f;
+        float boardZ;
+        if (roomData != null) {
+            boardZ = roomData.localRoomData.z;
+        } else {
+            boardZ = 0f;
+        }
 
         // Get the first digit of the absolute value of Z
         float absZ = Mathf.Abs(boardZ);
         while (absZ >= 10f) absZ /= 10f;
         int firstDigit = (int)Mathf.Floor(absZ);
 
-        bool zStartsWithOne = firstDigit == 1;
-
+        bool zStartsWithOne = false;
+        if (firstDigit == 1) {
+            zStartsWithOne = true;
+        }
         if (zStartsWithOne) {
             if (activeBallCount > 1) {
                 gameObject.SetActive(false);
@@ -498,9 +496,13 @@ public class BallMovement : MonoBehaviour {
             Transform boardTransform = collision.transform.parent; // RoofPiece parent = Board
 
             if (boardTransform != null && boardTransform.gameObject != currentLayer) {
-                // Use the collider bounds for more reliable Y check
                 BoxCollider2D roofCollider = collision.collider as BoxCollider2D;
-                float roofTopY = roofCollider != null ? roofCollider.bounds.max.y : collision.transform.position.y;
+                float roofTopY;
+                if (roofCollider != null) {
+                    roofTopY = roofCollider.bounds.max.y;
+                } else {
+                    roofTopY = collision.transform.position.y;
+                }
 
                 float tolerance = 0.15f; // small buffer for floating-point / physics imprecision
                 if (transform.position.y >= roofTopY - tolerance) {

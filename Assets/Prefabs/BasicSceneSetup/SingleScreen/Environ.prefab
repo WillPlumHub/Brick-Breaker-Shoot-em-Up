@@ -183,6 +183,7 @@ MonoBehaviour:
   initialRoomPosition: {x: 0, y: 0}
   numberOfBricks: 0
   initialNumberOfBricks: 0
+  Brick: {fileID: 153777431337220858, guid: d70ce42994815594fb44a77be080db45, type: 3}
 --- !u!1 &3960934697477651629
 GameObject:
   m_ObjectHideFlags: 0
@@ -605,6 +606,7 @@ PrefabInstance:
     - {fileID: 9000897076992849338, guid: a21aeb9670bef78479ef844b5b356d18, type: 3}
     - {fileID: 2660220776694945413, guid: a21aeb9670bef78479ef844b5b356d18, type: 3}
     - {fileID: 8295617840139437582, guid: a21aeb9670bef78479ef844b5b356d18, type: 3}
+    - {fileID: 2746934089423694732, guid: a21aeb9670bef78479ef844b5b356d18, type: 3}
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: a21aeb9670bef78479ef844b5b356d18, type: 3}

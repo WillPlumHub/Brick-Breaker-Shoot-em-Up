@@ -33,6 +33,8 @@ public class LevelData : ScriptableObject {
     private void OnValidate() {
         Validate();
         SyncLevelRooms();
+
+        difficulty = Mathf.Clamp(difficulty, 0, 5);
     }
 
     public void Validate() {

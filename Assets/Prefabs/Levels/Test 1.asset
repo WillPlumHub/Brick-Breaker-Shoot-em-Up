@@ -12,9 +12,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6bafe4a8d4ffda04c945253e690a6ab4, type: 3}
   m_Name: Test 1
   m_EditorClassIdentifier: 
-  StageName: 1ShmupScene
+  StageName: 1ShmupScene TestLength
   difficulty: 1
   description: Test
-  LevelRooms:
-  - {x: 0, y: 10, z: 0}
-  - {x: 0, y: 0, z: 0}
+  LevelRoomsInspector:
+  - leftRoom: {x: 0, y: 0, z: 3.1, w: 0}
+    mainRoom: {x: 0, y: 0, z: 3.1, w: 0}
+    rightRoom: {x: 0, y: 0, z: 3.1, w: 0}
