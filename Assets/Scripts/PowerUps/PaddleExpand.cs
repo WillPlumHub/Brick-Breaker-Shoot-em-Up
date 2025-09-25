@@ -43,7 +43,7 @@ public class PaddleExpand : MonoBehaviour {
         if (leftWall != null && rightWall != null) {
             float roomWidth = Mathf.Abs(rightWall.position.x - leftWall.position.x);
             float paddleScaleX = paddle.transform.localScale.x;
-            float newScaleX = paddleScaleX * paddleExpandMultiplier;
+            float newScaleX = paddleScaleX * gameManager.PaddleSizeMod;
 
             // Use room width minus small margin (to ensure it fits comfortably)
             float safetyMargin = 0.1f;

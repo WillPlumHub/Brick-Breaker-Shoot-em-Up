@@ -146,15 +146,25 @@ public class ObjHealth : MonoBehaviour {
 
     public void OnCollisionEnter2D(Collision2D collision) {
         if (collision.gameObject.CompareTag("Brick")) {
-            //GetComponent<SpriteRenderer>().color = Color.red;
-            gameObject.SetActive(false);
-        } else {
-            Debug.Log("[Brick] Destroyed by overlapping with: " + collision.gameObject.name);
+            GetComponent<SpriteRenderer>().color = Color.red;
+            //gameObject.SetActive(false);
+        } else if (!collision.gameObject.CompareTag("PowerUp")) {
+            //Debug.Log("[Brick] Destroyed by overlapping with: " + collision.gameObject.name);
             Destroy(gameObject);
         }
     }
 
     public void OnTriggerEnter2D(Collider2D collision) {
-        Destroy(gameObject);
+        if (!collision.gameObject.CompareTag("PowerUp")) {
+            Destroy(gameObject);
+        }
+    }
+
+    public void lower() {
+        if (transform.position.y < (transform.parent.position.y - 2f)) {
+            return;
+        }
+        transform.position = new Vector3(transform.position.x, transform.position.y - 0.36f, 0f);
+        return;
     }
 }

@@ -15,7 +15,7 @@ GameObject:
   - component: {fileID: 7000676953480222086}
   m_Layer: 0
   m_Name: Cash
-  m_TagString: Ball
+  m_TagString: PowerUp
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -169,4 +169,5 @@ MonoBehaviour:
   deathPlane: -6
   floorAngleThreshold: 30
   scoreValue: 1
+  defaultScoreValue: 0
   scoreMult: 2

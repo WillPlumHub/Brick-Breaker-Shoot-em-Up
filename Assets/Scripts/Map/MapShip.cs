@@ -109,8 +109,10 @@ public class MapShip : MonoBehaviour {
         inputUp = flipUp;
         inputHeld = flipHeld;
 
-        IsRightClickPressed();
-        
+        if (!disabled) {
+            IsRightClickPressed();
+        }
+
         // --- Input Direction ---
         Vector2 direction = Vector2.zero;
 
@@ -194,10 +196,11 @@ public class MapShip : MonoBehaviour {
     }
 
     public void movement() {
-        if (flipping || moving) {
+        if (flipping || moving && !disabled) {
             transform.position = Vector3.MoveTowards(transform.position, targetPosition, currentSpeed * Time.deltaTime);
         }
     }
+
 
     public void aboutFace() {
         if (flipping) return; // Don't rotate while flipping
@@ -206,7 +209,8 @@ public class MapShip : MonoBehaviour {
         float angle = Mathf.Atan2(directionToMouse.y, directionToMouse.x) * Mathf.Rad2Deg;
         transform.rotation = Quaternion.Euler(0f, 0f, angle - 90f);
     }
-        
+    
+
     public void cameraFollow() {
         if (moving) { // Accelerate camera follow
             currentFollowTime += Time.deltaTime;
@@ -225,6 +229,7 @@ public class MapShip : MonoBehaviour {
             }
         }
     }
+
 
     public void AdjustTriggerToCameraEdges() {
         // Find trigger collider
@@ -252,6 +257,8 @@ public class MapShip : MonoBehaviour {
         triggerCollider.size = new Vector2(3f, maxForwardDist);
         triggerCollider.offset = new Vector2(0f, maxForwardDist / 2f);
     }
+    
+
     public bool IsRightClickPressed() {
 
         bool MagnetPull = Input.GetMouseButton(1)
@@ -261,5 +268,11 @@ public class MapShip : MonoBehaviour {
 
         // Assuming you're checking for right mouse button
         return MagnetPull;
+    }
+
+    public void OnCollisionEnter2D(Collision2D collision) {
+        if (collision.gameObject.CompareTag("Wall")) {
+            
+        }
     }
 }

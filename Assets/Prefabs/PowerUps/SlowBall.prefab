@@ -15,7 +15,7 @@ GameObject:
   - component: {fileID: 3503170673274124380}
   m_Layer: 0
   m_Name: SlowBall
-  m_TagString: Untagged
+  m_TagString: PowerUp
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -171,4 +171,5 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1a5818f4c1cee674cba505023b476240, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  score: 75
   gameManager: {fileID: 0}

@@ -3,7 +3,6 @@ using UnityEngine;
 
 public class CameraFollow : MonoBehaviour {
 
-    public float mod = -1.56f;
     public float movementSpeed = 10;
     private float targetY;
 

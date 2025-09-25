@@ -57,7 +57,7 @@ public class PaddleMove : MonoBehaviour {
     
     void Awake() {
         currentYPos = baseYPos;
-        maxFlipHeight = baseYPos + 0.5f;
+        maxFlipHeight = baseYPos + 1.0f;
         GameManager.IsGameStart = true;
         gameManager = GameObject.FindGameObjectWithTag("GameController").GetComponent<GameManager>();
     }
@@ -312,15 +312,14 @@ public class PaddleMove : MonoBehaviour {
                 if (ballMovement.isStuckToPaddle || (ballMovement.stickTarget != null && ballMovement.stickTarget != gameObject)) {
                     ballMovement.ReleaseFromStick();
                 }
-                if (ballMovement.moveDir.y == 1) {
-
+                if (ballMovement.moveDir.y > 0) {
                     if (ballMovement.currentSpeed > 13.5f) {
                         ballMovement.currentSpeed -= (decellerate/3);
                     } else {
                         ballMovement.currentSpeed -= decellerate;
                     }   
-                } else if (ballMovement.moveDir.y == -1) {
-                    ballMovement.currentSpeed += decellerate;
+                } else if (ballMovement.moveDir.y < 0) {
+                    ballMovement.currentSpeed += (decellerate/3);
                 } else {
                     ballMovement.moveDir.y = -1;
                 }

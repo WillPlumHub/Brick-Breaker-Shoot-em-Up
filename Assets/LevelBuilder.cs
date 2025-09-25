@@ -127,7 +127,7 @@ public class LevelBuilder : MonoBehaviour {
         string intStr = intPart.ToString();
         for (int i = intStr.Length - 1; i >= 0; i--) {
             intDigits.Add(intStr[i] - '0');
-            Debug.Log("[Roof Gap] Integer digit " + (intStr.Length - 1 - i) + " : " + intStr[i]);
+            //Debug.Log("[Roof Gap] Integer digit " + (intStr.Length - 1 - i) + " : " + intStr[i]);
         }
 
         // Decimal part
@@ -136,7 +136,7 @@ public class LevelBuilder : MonoBehaviour {
             string decimalStr = decimalPart.ToString("0.##########").Split('.')[1];
             for (int i = decimalStr.Length - 1; i >= 0; i--) {
                 decimalDigits.Add(decimalStr[i] - '0');
-                Debug.Log("[Roof Gap] Decimal digit " + (decimalStr.Length - 1 - i) + " : " + decimalStr[i]);
+                //Debug.Log("[Roof Gap] Decimal digit " + (decimalStr.Length - 1 - i) + " : " + decimalStr[i]);
             }
         }
     }
@@ -464,6 +464,6 @@ public class LevelBuilder : MonoBehaviour {
         sideTrans.GetComponent<XTransition>().partnerTransition = mainTrans;
         mainTrans.GetComponent<XTransition>().partnerTransition = sideTrans;
 
-        Debug.Log($"Spawned XTransition: side={sideBoard.name}, main={mainBoard.name}, Z={heightRatioZ}, decimal={decimalZ:F2}");
+        //Debug.Log($"Spawned XTransition: side={sideBoard.name}, main={mainBoard.name}, Z={heightRatioZ}, decimal={decimalZ:F2}");
     }
 }

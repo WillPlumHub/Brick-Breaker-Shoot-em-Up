@@ -16,15 +16,15 @@ MonoBehaviour:
   difficulty: 2
   description: df
   LevelRoomsInspector:
-  - leftRoom: {x: -2.7, y: 0, z: 1.2, w: 51}
-    mainRoom: {x: -4.3, y: 0, z: 3.1, w: 51}
+  - leftRoom: {x: 0, y: 0, z: 1.2, w: 222}
+    mainRoom: {x: 0, y: 0, z: 3.1, w: 222}
     rightRoom: {x: -2, y: 0, z: 3.2, w: 51}
   - leftRoom: {x: 2.7, y: 0, z: 1.1, w: 552}
-    mainRoom: {x: 2.7, y: 0, z: 1, w: 552}
+    mainRoom: {x: 2.7, y: 0, z: 3.1, w: 552}
     rightRoom: {x: 2.7, y: 0, z: 0.1, w: 552}
-  - leftRoom: {x: -2, y: 0, z: 3.2, w: 0}
-    mainRoom: {x: -2, y: 0, z: 3.2, w: 0}
-    rightRoom: {x: -2, y: 0, z: 3.2, w: 0}
+  - leftRoom: {x: -2, y: 0, z: 3.2, w: 222}
+    mainRoom: {x: -2, y: 0, z: 3.2, w: 222}
+    rightRoom: {x: -2, y: 0, z: 3.2, w: 222}
   - leftRoom: {x: 0, y: 0, z: 3.2, w: 0}
     mainRoom: {x: 0, y: 0, z: 2.2, w: 0}
     rightRoom: {x: 0, y: 0, z: 3.2, w: 0}

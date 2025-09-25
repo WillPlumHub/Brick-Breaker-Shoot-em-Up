@@ -33,21 +33,21 @@ public class LevelEntrance : MonoBehaviour {
     }
 
     void Update() {
-        if (playerInTrigger && (Input.GetKeyDown(KeyCode.Space) || Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.JoystickButton2))) {
+        if (playerInTrigger && (Input.GetKeyDown(KeyCode.Space) || Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.JoystickButton1))) {
             inputStarted = true;
-            paddle.GetComponent<MapShip>().disabled = true;
         }
 
-        if (playerInTrigger && inputStarted && (Input.GetKeyUp(KeyCode.Space) || Input.GetMouseButtonUp(0) || Input.GetKeyUp(KeyCode.JoystickButton2))) {
+        if (playerInTrigger && inputStarted && (Input.GetKeyUp(KeyCode.Space) || Input.GetMouseButtonUp(0) || Input.GetKeyUp(KeyCode.JoystickButton1))) {
             if (levelPromptUI == null || !levelPromptUI.activeSelf) {
                 ShowLevelUI();
+                paddle.GetComponent<MapShip>().disabled = true;
                 DifficultyStars();
             } else {
                 LoadLevel();
             }
         }
 
-        if (playerInTrigger && (Input.GetKeyDown(KeyCode.Space) || Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.JoystickButton1))) {
+        if (playerInTrigger && (Input.GetKeyDown(KeyCode.Space) || Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.JoystickButton2))) {
             if (levelPromptUI == null || levelPromptUI.activeSelf) {
                 HideLevelUI();
                 paddle.GetComponent<MapShip>().disabled = false;

@@ -79,10 +79,10 @@ public class LocalRoomData : MonoBehaviour {
         yield return new WaitForEndOfFrame();
         yield return new WaitForEndOfFrame();
         if ((int)localRoomData.z != 3 && initialNumberOfBricks == 0) {
-            Debug.Log("[Default Brick] Laid default brick");
+            //Debug.Log("[Default Brick] Laid default brick");
             Instantiate(Brick, transform.position, Quaternion.identity);
         } else {
-            Debug.Log("[Default Brick] Bricks accounted for");
+            //Debug.Log("[Default Brick] Bricks accounted for");
         }
     }
 }

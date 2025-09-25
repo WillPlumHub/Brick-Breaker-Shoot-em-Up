@@ -13,6 +13,7 @@ TagManager:
   - XTransition
   - invisibleBrick
   - BlockList
+  - PowerUp
   layers:
   - Default
   - TransparentFX

@@ -15,7 +15,7 @@ GameObject:
   - component: {fileID: 7320707500783799494}
   m_Layer: 0
   m_Name: SplitBall
-  m_TagString: Untagged
+  m_TagString: PowerUp
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -171,4 +171,5 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6887c5395290fc94689ee88289625947, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  score: 75
   gameManager: {fileID: 0}

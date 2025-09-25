@@ -124,7 +124,7 @@ public class CashBunch : MonoBehaviour {
         float angle = Vector2.Angle(normal, Vector2.up);
 
         
-        if (!collision.gameObject.CompareTag("Player") && !collision.gameObject.CompareTag("Brick") && !collision.gameObject.CompareTag("Block")) {
+        if (!collision.gameObject.CompareTag("Player") ) {
             HandleBouncePhysics(angle, collision.gameObject);
         }
 

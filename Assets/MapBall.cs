@@ -38,7 +38,7 @@ public class MapBall : MonoBehaviour {
 
     void Update() {
         if (playerIsInTrigger && playerInRange != null && playerMapShipInRange != null) {
-            if (playerMapShipInRange.IsRightClickPressed() && Vector3.Distance(transform.position, playerInRange.position) > playerMapShipInRange.minRange) {
+            if (!playerMapShipInRange.disabled && playerMapShipInRange.IsRightClickPressed() && Vector3.Distance(transform.position, playerInRange.position) > playerMapShipInRange.minRange) {
                 var step = playerMapShipInRange.strength * Time.deltaTime;
                 transform.position = Vector3.MoveTowards(transform.position, playerInRange.position, step);
                 //Debug.Log("Moving towards player");

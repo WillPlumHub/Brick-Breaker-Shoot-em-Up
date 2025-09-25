@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using TMPro;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
@@ -189,13 +190,13 @@ public class GameManager : MonoBehaviour {
 
         RoomHistory.Enqueue(new Vector2(1, 0));
         Vector2[] historyArray = RoomHistory.ToArray();
-        Debug.Log($"  [{0}]: Room {historyArray[0]}");
+        //Debug.Log($"  [{0}]: Room {historyArray[0]}");
     }
 
     private void Update() {
 
         if (isTransitioning) {
-            Debug.Log("HRT!!!!!!!!!!");
+            //Debug.Log("HRT!!!!!!!!!!");
         }
         UpdateDebugValues();
         UpdateGameState();
@@ -227,11 +228,15 @@ public class GameManager : MonoBehaviour {
             LocalRoomData roomData = GetCurrentLayer().GetComponent<LocalRoomData>();
             Debug.Log("[CASE 3] Brick Count == " + roomData.numberOfBricks);
         }
+
+        /*if (Input.GetKeyDown(KeyCode.Space)) {
+            lower();
+        }*/
     }
 
     public void transitionCheck() {
         if (hasLoadedNextLevel || IsGameStart || isRemovingBoard) {
-            Debug.Log($"Transition blocked - hasLoadedNextLevel: {hasLoadedNextLevel}, IsGameStart: {IsGameStart}, isRemovingBoard: {isRemovingBoard}");
+            //Debug.Log($"Transition blocked - hasLoadedNextLevel: {hasLoadedNextLevel}, IsGameStart: {IsGameStart}, isRemovingBoard: {isRemovingBoard}");
             return;
         }
 
@@ -248,7 +253,7 @@ public class GameManager : MonoBehaviour {
 
         LocalRoomData roomData = currentLayer.GetComponent<LocalRoomData>();
         if (roomData == null) {
-            Debug.Log("Transition blocked - roomData is null");
+            //Debug.Log("Transition blocked - roomData is null");
             return;
         }
 
@@ -281,18 +286,18 @@ public class GameManager : MonoBehaviour {
 
         // Only trigger board removal / next level if no bricks remain
         if (roomData.numberOfBricks <= 0f) {
-            Debug.Log($"[CASE 3] Board cleared at Row {currentBoardRow}, Column {currentBoardColumn}");
+            //Debug.Log($"[CASE 3] Board cleared at Row {currentBoardRow}, Column {currentBoardColumn}");
             float boardZ = roomData.localRoomData.z;
             int onesZ = ((int)Mathf.Floor(boardZ)) % 10;
 
             switch (onesZ) {
                 case 0: // Move up a row, delete previous row
-                    Debug.Log("[CASE 3] Case 0 triggered. Brick Count == " + roomData.numberOfBricks);
+                    //Debug.Log("[CASE 3] Case 0 triggered. Brick Count == " + roomData.numberOfBricks);
                     StartCoroutine(RemoveCurrentBoard(ZCase: 0));
                     break;
 
                 case 1: // Delete current board, reset paddle/balls to previous board or main/side room
-                    Debug.Log("[CASE 3] Case 1 triggered. Brick Count == " + roomData.numberOfBricks);
+                    //Debug.Log("[CASE 3] Case 1 triggered. Brick Count == " + roomData.numberOfBricks);
                     StartCoroutine(RemoveCurrentBoard(ZCase: 1));
                     break;
 
@@ -301,11 +306,11 @@ public class GameManager : MonoBehaviour {
                     break;
 
                 case 3:
-                    Debug.Log("[CASE 3] Case 3 triggered. Brick Count == " + roomData.numberOfBricks);
+                    //Debug.Log("[CASE 3] Case 3 triggered. Brick Count == " + roomData.numberOfBricks);
                     break;
             }
         } else {
-            Debug.Log($"Brick count: {roomData.numberOfBricks} - not ready for transition");
+            //Debug.Log($"Brick count: {roomData.numberOfBricks} - not ready for transition");
         }
     }
 
@@ -408,6 +413,14 @@ public class GameManager : MonoBehaviour {
             int originalColumn = currentBoardColumn;
 
             levelLayers[currentBoardRow, currentBoardColumn] = null;
+
+            GameObject xtrans = null;
+            foreach (Transform child in currentBoard.transform) {
+                if (child.name.StartsWith("XTransition(Clone)")) {
+                    xtrans = child.gameObject.GetComponent<XTransition>().partnerTransition;
+                }
+            }
+            Destroy(xtrans);
             Destroy(currentBoard);
 
             // Use RoomHistory to find the previous room
@@ -676,9 +689,45 @@ public class GameManager : MonoBehaviour {
     }
 
 
+    public float findRoofHeight() {
+        GameObject currentLayer = GetCurrentLayer();
+        if (currentLayer == null) {
+            Debug.LogWarning("findRoofHeight: No current layer");
+            return Mathf.Infinity;
+        }
+
+        Transform roofTransform = currentLayer.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name.StartsWith("RoofPiece")); // Make sure name matches
+
+        if (roofTransform == null) {
+            // Try alternative names
+            roofTransform = currentLayer.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name.ToLower().Contains("roof"));
+
+            if (roofTransform == null) {
+                Debug.LogWarning("findRoofHeight: No roof transform found");
+                return Mathf.Infinity;
+            }
+        }
+
+        // Get the actual bottom of the roof (ceiling height)
+        Collider2D roofCollider = roofTransform.GetComponent<Collider2D>();
+        if (roofCollider != null) {
+            return roofCollider.bounds.min.y; // Bottom of roof = ceiling height
+        }
+
+        return roofTransform.position.y;
+    }
 
 
     #region PowerUps
+    public void lower() {
+        foreach (Transform child in brickContainer.transform) {
+            child.GetComponent<ObjHealth>().lower();
+        }
+        return;
+    }
+    
+    
+    
     public void expandPaddle() {
         GameObject paddle = GameObject.Find("Paddle");
         Vector3 scale = paddle.transform.localScale;
@@ -1279,10 +1328,15 @@ public class GameManager : MonoBehaviour {
         if (powerUps != null) {
             powerUpsText = powerUps.ToString();
         }
+        string ballSpeedText = "N/A";
+        if (ActiveBalls.Count > 0) {
+            ballSpeedText = ActiveBalls[0].GetComponent<BallMovement>().currentSpeed.ToString();
+        }
 
         DebugInfo.text =
             "=== GAME STATE INFO ===\n" +
-            "IsGameStart: " + IsGameStart + "\n" +
+            "IsGameStart: " + IsGameStart + "\n\n\n\n" +
+            "Da Ball Zoom: " + ballSpeedText  + "\n\n\n\n" +
             "Current Board: Row " + currentBoardRow + ", Column " + currentBoardColumn + "\n" +
             "Total Rows: " + rows + ", Columns: " + cols + "\n" +
             "Bricks: " + bricks + "/" + initialBricks + " from " + brickContainerName + " Z: " + roomData.localRoomData.z + "\n\n" +
