@@ -14,5 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   itemName: Lightning
   overlaySprite: {fileID: 0}
-  prefab: {fileID: 4737523412858630926, guid: e0d0eb95e6b396040a6fb19e2306e75f, type: 3}
+  prefab: {fileID: 4747788610326373369, guid: 537e8b6b1c2a28f40adac85d58a02344, type: 3}
   dropRate: 2
+  script: {fileID: 11500000, guid: 2cacc890e33ea4349ab8576b17939478, type: 3}

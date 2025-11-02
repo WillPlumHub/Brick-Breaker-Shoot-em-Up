@@ -14,5 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   itemName: Laser Paddle
   overlaySprite: {fileID: 0}
-  prefab: {fileID: 30554430017443378, guid: 41bab84fbf0ccfb4e95a121030cafe48, type: 3}
+  prefab: {fileID: 4747788610326373369, guid: 537e8b6b1c2a28f40adac85d58a02344, type: 3}
   dropRate: 2
+  script: {fileID: 11500000, guid: 581ed7644f86f9346a1116ef54a1b35f, type: 3}

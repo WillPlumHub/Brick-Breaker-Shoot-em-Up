@@ -2,21 +2,21 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class BrickZap : MonoBehaviour {
+public class PaddleJump : MonoBehaviour {
 
     public int score = 75;
-    public GameManager gameManager;
+    public PaddleMove paddleMove;
 
     void Awake() {
-        if (gameManager == null) {
-            gameManager = FindObjectOfType<GameManager>();
+        if (paddleMove == null) {
+            paddleMove = FindObjectOfType<PaddleMove>();
         }
     }
 
-    public void OnTriggerEnter2D(UnityEngine.Collider2D collision) {
+    public void OnTriggerEnter2D(Collider2D collision) {
         if (collision.gameObject.CompareTag("Player")) {
-            if (gameManager != null) {
-                gameManager.BrickZap();
+            if (paddleMove != null && paddleMove.maxFlipHeight <= -2.5f) {
+                paddleMove.maxFlipHeight += 0.5f;
             } else {
                 Debug.LogWarning("GameManager not found!");
             }

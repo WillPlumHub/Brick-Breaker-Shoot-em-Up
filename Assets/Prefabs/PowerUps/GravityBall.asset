@@ -14,5 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   itemName: Gravity Ball
   overlaySprite: {fileID: 0}
-  prefab: {fileID: 2911441378048457464, guid: c56eb1919d43dee42a971ea55b2600c3, type: 3}
+  prefab: {fileID: 4747788610326373369, guid: 537e8b6b1c2a28f40adac85d58a02344, type: 3}
   dropRate: 3
+  script: {fileID: 11500000, guid: 32b8927ff056f8f48b0cf7c6dd8b15de, type: 3}

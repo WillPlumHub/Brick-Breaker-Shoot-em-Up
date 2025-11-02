@@ -4,7 +4,6 @@ using UnityEngine;
 public class PaddleExpand : MonoBehaviour {
     public int score = 75;
     public GameManager gameManager;
-    public float paddleExpandMultiplier = 2f; // Should match what expandPaddle() does
 
     void Awake() {
         if (gameManager == null) {

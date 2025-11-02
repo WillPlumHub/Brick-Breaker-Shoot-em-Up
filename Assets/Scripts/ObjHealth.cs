@@ -16,7 +16,7 @@ public class ObjHealth : MonoBehaviour {
     private CameraShake cameraShake;
 
     void Start() {
-        GridSet();
+        //GridSet();
         StartCoroutine(AssignParentCoroutine());
         
         cameraShake = FindObjectOfType<CameraShake>();
@@ -146,11 +146,13 @@ public class ObjHealth : MonoBehaviour {
 
     public void OnCollisionEnter2D(Collision2D collision) {
         if (collision.gameObject.CompareTag("Brick")) {
-            GetComponent<SpriteRenderer>().color = Color.red;
+            //GetComponent<SpriteRenderer>().color = Color.red;
             //gameObject.SetActive(false);
         } else if (!collision.gameObject.CompareTag("PowerUp")) {
             //Debug.Log("[Brick] Destroyed by overlapping with: " + collision.gameObject.name);
             Destroy(gameObject);
+        } else {
+            GetComponent<SpriteRenderer>().color = Color.white;
         }
     }
 

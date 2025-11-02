@@ -22,6 +22,7 @@ public class LevelBuilder : MonoBehaviour {
     public GameObject[,] CreatedBoards; // [row, col] where col: 0 = left,1 = main,2 = right
 
     private Vector3 nextMainSpawn;
+    public float levelHeight = 0;
 
     private void Awake() {
         if (!ValidateInputs()) {
@@ -113,8 +114,22 @@ public class LevelBuilder : MonoBehaviour {
             }
 
             float tallestY = Mathf.Max(mainRoomY, leftRoomY, rightRoomY);
+            levelHeight += (tallestY/10) + 1;
+            Debug.Log("[BACKGROUND] TALLEST Y: " + tallestY + " + " + 1 + " = " + levelHeight);
             nextMainSpawn = new Vector3(0f, mainSpawn.y + baseRoomHeight + tallestY, 0f);
+
+            if (r == (rows - 1)) {
+                var background = Instantiate(levelData.BackgroundObject, mainSpawn, Quaternion.identity);
+                background.name = "Level Background";
+                
+                background.transform.position = new Vector3(0, (mainBoard.transform.position.y / 2), 1); ;
+                background.transform.localScale = new Vector3(7, levelHeight + 1, 1);
+                background.GetComponent<SpriteRenderer>().sprite = levelData.Background;
+                background.transform.SetParent(mainBoard.transform);
+                Debug.Log("[BACKGROUND] background position: " + (mainBoard.transform.position.y / 2) + ", levelHeight: " + levelHeight);
+            }
         }
+
         GameManager.currentLevelData = levelData;
     }
 

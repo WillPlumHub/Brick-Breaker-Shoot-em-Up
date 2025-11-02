@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using System.Security.Cryptography;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -44,6 +45,20 @@ public class PaddleMove : MonoBehaviour {
     public bool grabPaddle = false;
     public bool anyBallStuck = false;
 
+    /*[Header("Circular Paddle")]
+    public bool circularPaddle = false;
+    public float orbitRadiusX = 7f;   // Horizontal radius
+    public float orbitRadiusY = 4f;   // Vertical radius
+    public float orbitSpeed = 90f;    // Degrees per second
+    private float currentAngle = 0f;  // In degrees
+
+    [Header("Circular Flip")]
+    public float circularFlipRadiusIncrease = 1.5f; // How much the radius increases during flip
+    public float circularFlipRecoilSpeed = 8f;      // Speed to return to normal radius
+    private float currentOrbitRadiusX;              // Current dynamic radius
+    private float currentOrbitRadiusY;              // Current dynamic radius
+    private bool wasCircularPaddle = false;         // Track previous state
+    */
     [HideInInspector]
     public bool isTransitioning = false;
 
@@ -57,29 +72,52 @@ public class PaddleMove : MonoBehaviour {
     
     void Awake() {
         currentYPos = baseYPos;
-        maxFlipHeight = baseYPos + 1.0f;
+        maxFlipHeight = baseYPos + 0.5f;
         GameManager.IsGameStart = true;
         gameManager = GameObject.FindGameObjectWithTag("GameController").GetComponent<GameManager>();
     }
 
     void Update() {
+        /*if ((int)GameManager.GetCurrentLayer().GetComponent<LocalRoomData>().localRoomData.z == 5) {
+            circularPaddle = true;
+        } else {
+            circularPaddle = false;
+        }*/
+
         if (!isTransitioning) {
             HandleInput();
-            PaddleMovement();
-            flip();
             sizeUpdate();
+
+            /*if (circularPaddle) {
+                CircularMovement();
+
+                CircularFlip(); // Add circular flip handling
+            } else {*/
+            PaddleMovement();
+            //if (!GameManager.IsGameStart) {
+            flip();
+            //}
         }
-        //InputCheck();
+        InputCheck();
     }
 
 
     #region Controller Management
     public void InputCheck() {
-        for (int i = 0; i <= 19; i++) {
+        for (int i = 0; i <= 20; i++) {
             if (Input.GetKeyDown((KeyCode)(330 + i))) {
                 Debug.Log("Joystick Button Pressed: " + i);
             }
         }
+
+        // Also check axis-based D-pad input
+        float horizontal = Input.GetAxis("Horizontal");
+        float vertical = Input.GetAxis("Vertical");
+
+        if (horizontal > 0.5f) Debug.Log("D-pad Right (Axis)");
+        if (horizontal < -0.5f) Debug.Log("D-pad Left (Axis)");
+        if (vertical > 0.5f) Debug.Log("D-pad Up (Axis)");
+        if (vertical < -0.5f) Debug.Log("D-pad Down (Axis)");
     }
 
     void DetectControlType() {
@@ -134,6 +172,7 @@ public class PaddleMove : MonoBehaviour {
           JoystickButton9 = Start
           JoystickButton10 = L3
           JoystickButton11 = R3
+          JoystickButton12 = Home Button
         */
 
 
@@ -177,7 +216,11 @@ public class PaddleMove : MonoBehaviour {
                 }
             }
             if (magnetDown) {
-                MagnetPull();
+                /*if (circularPaddle) {
+                    Debug.Log("[CIRCULAR PADDLE] Circular Magnet Pull");
+                } else {*/
+                    MagnetPull();
+                //}
             }
         }
     }
@@ -217,6 +260,8 @@ public class PaddleMove : MonoBehaviour {
             return;
         }
 
+        transform.rotation = Quaternion.identity;
+        transform.position = new Vector3(transform.position.x, baseYPos, 0f);
         if (GameManager.levelLayers == null || GameManager.currentBoardRow < 0 || GameManager.currentBoardRow >= GameManager.levelLayers.GetLength(0) || GameManager.currentBoardColumn < 0 || GameManager.currentBoardColumn >= GameManager.levelLayers.GetLength(1)) {
             return;
         }
@@ -274,14 +319,31 @@ public class PaddleMove : MonoBehaviour {
                 targetX = Mathf.Clamp(mousePosition.x, leftBoundary - modf, rightBoundary + modf);
                 break;
 
-            case ControlType.Keyboard:
+            /*case ControlType.Keyboard:
             case ControlType.Gamepad:
-                moveInput = Input.GetAxisRaw("Horizontal");
+                // Get stick input
+                float stickInput = Input.GetAxisRaw("Horizontal");
+
+                // Get D-pad input (using axes)
+                float dpadInput = Input.GetAxisRaw("DPadX");
+
+                // Prioritize D-pad if actively used, otherwise use stick
+                moveInput = (Mathf.Abs(dpadInput) > 0.1f) ? dpadInput : stickInput;
+                moveInput = Mathf.Clamp(moveInput, -1f, 1f);
+
                 float moveSpeed = 10f;
                 float newX = transform.position.x + moveInput * moveSpeed * mod * Time.deltaTime;
-                // Use the same clamping logic as mouse movement with modf adjustment
                 targetX = Mathf.Clamp(newX, leftBoundary - modf, rightBoundary + modf);
-                break;
+                break;*/
+
+                case ControlType.Keyboard:
+                case ControlType.Gamepad:
+                    moveInput = Input.GetAxisRaw("Horizontal");
+                    float moveSpeed = 10f;
+                    float newX = transform.position.x + moveInput * moveSpeed * mod * Time.deltaTime;
+                    // Use the same clamping logic as mouse movement with modf adjustment
+                    targetX = Mathf.Clamp(newX, leftBoundary - modf, rightBoundary + modf);
+                    break;
         }
 
         transform.position = new Vector3(targetX, currentYPos, 0f);
@@ -294,43 +356,137 @@ public class PaddleMove : MonoBehaviour {
             }
         }
     }
+
+
+    /*void CircularMovement() {
+        if (disableMovement > 0) {
+            disableMovement -= Time.deltaTime;
+            return;
+        }
+
+        GameObject currentLayer = GameManager.GetCurrentLayer();
+        if (currentLayer == null) return;
+        Vector2 roomCenter = new Vector2(currentLayer.transform.position.x, currentLayer.transform.position.y + 0.5f);
+
+        // Handle input
+        float input = 0f;
+        switch (controlType) {
+            case ControlType.Mouse:
+                Vector3 mouseWorld = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+                Vector2 dir = (mouseWorld - (Vector3)roomCenter).normalized;
+                currentAngle = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
+                break;
+
+            case ControlType.Keyboard:
+            case ControlType.Gamepad:
+                input = Input.GetAxisRaw("Horizontal");
+                currentAngle += input * orbitSpeed * Time.deltaTime;
+                break;
+        }
+
+        // Convert angle to oval coordinates
+        float rad = currentAngle * Mathf.Deg2Rad;
+        float x = roomCenter.x + Mathf.Cos(rad) * orbitRadiusX;
+        float y = roomCenter.y + Mathf.Sin(rad) * orbitRadiusY;
+
+        transform.position = new Vector3(x, y, 0f);
+
+        Vector2 lookDir = roomCenter - (Vector2)transform.position;
+        float angleToCenter = Mathf.Atan2(lookDir.y, lookDir.x) * Mathf.Rad2Deg;
+        transform.rotation = Quaternion.Euler(0, 0, angleToCenter - 90f);
+    }
+
+
+    void CircularFlip() {
+        // Handle circular flip radius changes
+        if (flipping) {
+            // Increase radius during flip
+            currentOrbitRadiusX = Mathf.MoveTowards(currentOrbitRadiusX, orbitRadiusX + circularFlipRadiusIncrease, flipSpeed * Time.deltaTime);
+            currentOrbitRadiusY = Mathf.MoveTowards(currentOrbitRadiusY, orbitRadiusY + circularFlipRadiusIncrease, flipSpeed * Time.deltaTime);
+        } else {
+            // Return to normal radius
+            currentOrbitRadiusX = Mathf.MoveTowards(currentOrbitRadiusX, orbitRadiusX, circularFlipRecoilSpeed * Time.deltaTime);
+            currentOrbitRadiusY = Mathf.MoveTowards(currentOrbitRadiusY, orbitRadiusY, circularFlipRecoilSpeed * Time.deltaTime);
+        }
+    }*/
+
+
+
     #endregion
 
     #region Paddle Abilities
-    void MagnetPull() { // Magnet pull
-        if (GameManager.IsGameStart || GameManager.ActiveBalls == null) return; // Don't bother conditions
+ void MagnetPull() {
+    if (GameManager.IsGameStart || GameManager.ActiveBalls == null) return;
 
-        foreach (GameObject ball in GameManager.ActiveBalls) { // Iterate through balls
-            if (ball == null) continue;
-            BallMovement ballMovement = ball.GetComponent<BallMovement>();
-            if (ballMovement == null /*|| ballMovement.isStuckToPaddle*/) continue;
+    foreach (GameObject ball in GameManager.ActiveBalls) {
+        if (ball == null) continue;
+        BallMovement ballMovement = ball.GetComponent<BallMovement>();
+        if (ballMovement == null) continue;
 
-            float range = Mathf.Clamp01(1f - (Mathf.Abs(ball.transform.position.x - transform.position.x) / magnetOffset)); // Check if given ball is within magnet range
-            bool isWithinOffset = range > 0f;
+        float range = Mathf.Clamp01(1f - (Mathf.Abs(ball.transform.position.x - transform.position.x) / magnetOffset));
+        bool isWithinOffset = range > 0f;
 
-            if (isWithinOffset) { // Actually activate the magnet effect
+        if (isWithinOffset) {
+            /*Collider2D ballCollider = ball.GetComponent<Collider2D>();
+            if (ballCollider == null) continue; // Use continue instead of return!
+            
+            ContactFilter2D filter = new ContactFilter2D();
+            filter.useTriggers = true; // This is the important line!
+            filter.SetLayerMask(Physics2D.DefaultRaycastLayers);
+            filter.useLayerMask = true;
+
+            Collider2D[] overlappingColliders = new Collider2D[10];
+            int count = Physics2D.OverlapCollider(ballCollider, filter, overlappingColliders);
+
+
+            Debug.Log($"Found {count} overlapping colliders for ball {ball.name}");
+
+            bool foundPlayerCollider = false;
+            for (int i = 0; i < count; i++) {
+                if (overlappingColliders[i] != null) {
+                    Debug.Log($"Collider {i}: {overlappingColliders[i].name} with tag: {overlappingColliders[i].tag}");
+                    if (overlappingColliders[i].CompareTag("Player")) {
+                        Debug.Log("WORKED!!!!!!!!!!! Found Player tag!");
+                        foundPlayerCollider = true;
+                        break;
+                    }
+                }
+            }
+
+            if (foundPlayerCollider) {
+                continue; // Skip to next ball
+            }*/
+
+            if (ballMovement.curPaddleMagnetVolume != null) {
+                    continue;
+                }
+                Debug.Log("[Magnet Check] Main Paddle Worked");
+
+                // Rest of magnet logic
                 if (ballMovement.isStuckToPaddle || (ballMovement.stickTarget != null && ballMovement.stickTarget != gameObject)) {
-                    ballMovement.ReleaseFromStick();
-                }
-                if (ballMovement.moveDir.y > 0) {
-                    if (ballMovement.currentSpeed > 13.5f) {
-                        ballMovement.currentSpeed -= (decellerate/3);
-                    } else {
-                        ballMovement.currentSpeed -= decellerate;
-                    }   
-                } else if (ballMovement.moveDir.y < 0) {
-                    ballMovement.currentSpeed += (decellerate/3);
+                ballMovement.ReleaseFromStick();
+            }
+            if (ballMovement.moveDir.y > 0) {
+                if (ballMovement.currentSpeed > 13.5f) {
+                    ballMovement.currentSpeed -= (decellerate/3);
                 } else {
-                    ballMovement.moveDir.y = -1;
-                }
+                    ballMovement.currentSpeed -= decellerate;
+                }   
+            } else if (ballMovement.moveDir.y < 0) {
+                ballMovement.currentSpeed += (decellerate/3);
+            } else {
+                ballMovement.moveDir.y = -1;
             }
         }
     }
+}
 
     void flip() {
         float targetHeight = flipping ? maxFlipHeight : baseYPos;
         currentYPos = Mathf.MoveTowards(currentYPos, targetHeight, flipSpeed * Time.deltaTime);
     }
+
+
     #endregion
 
     #region Power Ups

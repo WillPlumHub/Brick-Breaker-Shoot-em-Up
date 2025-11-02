@@ -10,10 +10,10 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4cd86775ed2867442803fe6ccb2b7713, type: 3}
-  m_Name: FastBall
+  m_Name: PaddleJump
   m_EditorClassIdentifier: 
-  itemName: Fast Ball
+  itemName: Paddle Jump
   overlaySprite: {fileID: 0}
   prefab: {fileID: 4747788610326373369, guid: 537e8b6b1c2a28f40adac85d58a02344, type: 3}
-  dropRate: 8
-  script: {fileID: 11500000, guid: 43c7e5eb417daac4fa60fd4b699089bf, type: 3}
+  dropRate: 2
+  script: {fileID: 11500000, guid: 95f21a07a9f6cf741a6838118a880f7a, type: 3}

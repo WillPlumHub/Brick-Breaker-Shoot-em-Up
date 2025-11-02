@@ -14,5 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   itemName: Kill Paddle
   overlaySprite: {fileID: 0}
-  prefab: {fileID: 9039183036645574383, guid: 74de0e4d259e1454c98788ac4a475309, type: 3}
+  prefab: {fileID: 4747788610326373369, guid: 537e8b6b1c2a28f40adac85d58a02344, type: 3}
   dropRate: 10
+  script: {fileID: 11500000, guid: 596e227e01b0d114da20749c18aaf05f, type: 3}

@@ -14,5 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   itemName: Split Ball
   overlaySprite: {fileID: 0}
-  prefab: {fileID: 4003154987017401998, guid: e49f384ac4e202f419868ef1281c524a, type: 3}
+  prefab: {fileID: 4747788610326373369, guid: 537e8b6b1c2a28f40adac85d58a02344, type: 3}
   dropRate: 4
+  script: {fileID: 11500000, guid: 6887c5395290fc94689ee88289625947, type: 3}

@@ -29,6 +29,7 @@ public class BallMovement : MonoBehaviour {
 
     [Header("Collision")]
     public GameObject paddle; // Reference to the paddle
+    public Collider2D curPaddleMagnetVolume;
     public float paddleOffset; // The x point where the ball hits the paddle
     public float offset = 1.8f; // The distance between ball & paddle at the start of a game
     public float deathPlane = -6f; // The height the ball dies at
@@ -36,11 +37,16 @@ public class BallMovement : MonoBehaviour {
     private bool collisionProcessedThisFrame = false;
 
     [Header("Other")]
+    public float maxMegaScale = 0.3f;
     public int scoreMult;
     public bool ceilingBreak = false;
 
     [Header("Transition Freeze")]
+    public float VerticalTransTimeUp = 0.5f;
+    public float VerticalTransTimeDown = 0.2f;
+    public float HorizontalTransTime = 0.5f;
     public bool isHorizontalTransitioning = false;
+    private Vector2 velocity = Vector2.zero;
 
     #region Initialization
     private void Awake() {
@@ -54,7 +60,11 @@ public class BallMovement : MonoBehaviour {
     }
 
     public void InitializeBall(Vector3 direction) {
-        moveDir = direction;
+        if (GameManager.ActiveBalls[0] != null && gameObject == GameManager.ActiveBalls[0].gameObject) {
+            moveDir = direction;
+        } else {
+            velocity = direction;
+        }
     }
     #endregion
 
@@ -71,7 +81,15 @@ public class BallMovement : MonoBehaviour {
             }
             StickToPaddle();
         } else {
-            MoveBall();
+            //if (IsObjectInViewport() || GameManager.isTransitioning) {
+            if (GameManager.ActiveBalls[0] != null && gameObject == GameManager.ActiveBalls[0].gameObject) {
+                GetComponent<SpriteRenderer>().color = Color.red;
+                MoveBall();
+            } else {
+                Debug.Log($"{gameObject.name} STATE - Stuck:{isStuckToPaddle}, HorizTrans:{isHorizontalTransitioning}, GMTrans:{GameManager.isTransitioning}, MoveDir:{moveDir}");
+                NormalPhysicsUpdate();
+            }
+            //}
             CheckPaddleCollision();
             roofCheck();
             AdjustSpeed();
@@ -85,24 +103,14 @@ public class BallMovement : MonoBehaviour {
         if (Input.GetKeyDown(KeyCode.KeypadEnter)) {
             moveDir = Vector2.zero;
         }
-
-         if (GameManager.isTransitioning) {
-            Vector2 savedMoveDir = moveDir;
-            savedSpeed = currentSpeed;
-            moveDir = Vector2.zero;
-            currentSpeed = 0f;
-            Debug.Log("[NEW TEST] SavedMoveDir: " + savedMoveDir + ", new moveDir: " + moveDir);
-         }
-
-         if (gameObject == GameManager.ActiveBalls[0].gameObject) {
-            GetComponent<SpriteRenderer>().color = Color.red;
-        }
+                
+        
 
     }
 
-    #region Ball Movement Helpers
+    #region Ball Movement
     private void MoveBall() {
-        if (GameManager.isTransitioning || isHorizontalTransitioning) return;
+        //if (GameManager.isTransitioning || isHorizontalTransitioning) return;
 
         if (currentSpeed > 30) {
             currentSpeed = 30;
@@ -135,6 +143,60 @@ public class BallMovement : MonoBehaviour {
             moveDir.y = -1f;
         }
     }
+
+    private void NormalPhysicsUpdate() {
+        // Initialize velocity from current direction and speed
+        if (velocity == Vector2.zero) {
+            velocity = moveDir.normalized * currentSpeed;
+        }
+
+        // Apply manual gravity
+        velocity.y -= 9.81f * Time.deltaTime;
+
+        // Clamp downward speed
+        velocity.y = Mathf.Max(velocity.y, -terminalFallSpeed);
+
+        // Move the ball
+        transform.position += (Vector3)(velocity * Time.deltaTime);
+
+        // Sync moveDir so CheckPaddleCollision() works
+        if (velocity.y > 0.001f) {
+            moveDir.y = 1;
+        } else {
+            moveDir.y = -1;
+        }
+
+            // Simple wall bounds (keep your existing code)
+            GameObject currentLayer = GameManager.GetCurrentLayer();
+        if (currentLayer != null) {
+            LocalRoomData roomData = currentLayer.GetComponent<LocalRoomData>();
+            if (roomData != null) {
+                float halfWidth = 7.3f + roomData.localRoomData.x;
+                float left = currentLayer.transform.position.x - halfWidth;
+                float right = currentLayer.transform.position.x + halfWidth;
+                float floorY = paddle.GetComponent<PaddleMove>().baseYPos - 0.5f;
+
+                // Horizontal bounce
+                if (transform.position.x < left || transform.position.x > right) {
+                    velocity.x *= -1f;
+                    moveDir.x *= -1f;
+                    transform.position = new Vector3(Mathf.Clamp(transform.position.x, left, right), transform.position.y, 0f);
+                }
+
+                if (transform.position.y >= GameManager.currentRoofHeight - 0.25f) {
+                    velocity.y *= -1f;
+                    moveDir.y *= -1f;
+                    transform.position = new Vector3(transform.position.x, Mathf.Clamp(transform.position.y, GameManager.Paddle.GetComponent<PaddleMove>().baseYPos - 1, GameManager.currentRoofHeight), 0f);
+                }
+
+                // Kill ball below floor
+                if (transform.position.y < floorY) {
+                    Destroy(gameObject);
+                }
+            }
+        }
+    }
+
     #endregion
 
 
@@ -212,89 +274,126 @@ public class BallMovement : MonoBehaviour {
             return;
         }
 
-        int totalRows = GameManager.levelLayers.GetLength(1) + 1;
+        int totalRows = GameManager.levelLayers.GetLength(0);
 
         // BOUNCE DOWN if roof is scrolling and ball is too high
-        if (transform.position.y > paddleMove.baseYPos + 9.38f && GameManager.currentBoardRow + 1 < totalRows && (GameManager.isShiftingDown || GameManager.levelLayers[GameManager.currentBoardRow + 1, GameManager.currentBoardColumn] == null)) {
-            Debug.Log("[Rebounding] Rebounding now during roof scroll");
+        /*if (transform.position.y > (paddleMove.baseYPos + 9.38f + GameManager.GetCurrentLayer().GetComponent<LocalRoomData>().localRoomData.y) && GameManager.currentBoardRow + 1 < totalRows && (GameManager.isShiftingDown || GameManager.levelLayers[GameManager.currentBoardRow + 1, GameManager.currentBoardColumn] == null)) {
+            Debug.Log("[Rebounding] Rebounding now during roof scroll: " + (paddleMove.baseYPos + 9.38f + GameManager.GetCurrentLayer().GetComponent<LocalRoomData>().localRoomData.y));
             moveDir.y = -1;
-        } else if (transform.position.y > paddleMove.baseYPos + 10 && GameManager.currentBoardRow + 1 < totalRows && !GameManager.isShiftingDown) { // Try to move UP a board (only if roof is NOT scrolling)
+        //} else if (transform.position.y > paddleMove.baseYPos + 10 && GameManager.currentBoardRow + 1 < totalRows && !GameManager.isShiftingDown) { // Try to move UP a board (only if roof is NOT scrolling)
+        }
+        
+        // TRANSITION UP
+        else*/ if (transform.position.y > GameManager.currentRoofHeight && GameManager.currentBoardRow + 1 < totalRows && !GameManager.isShiftingDown) { // Try to move UP a board (only if roof is NOT scrolling)
             if (gameObject == GameManager.ActiveBalls[0].gameObject) {
-                Debug.Log("[Glitch] Current row: " + GameManager.currentBoardRow + ", next row: " + (GameManager.currentBoardRow + 1) + ", totalRows: " + totalRows);
-
-                StartCoroutine(TransitionCoroutine());
-                //Debug.Log("GOING UP");
-
+                Debug.Log("CHECK totalRows: " + totalRows + ", " + (GameManager.currentBoardRow + 1) + ". Current Roof Height: " + GameManager.currentRoofHeight);
+                //Debug.Log("[Glitch] Current row: " + GameManager.currentBoardRow + ", next row: " + (GameManager.currentBoardRow + 1) + ", totalRows: " + totalRows);
+                CameraFollow.RoomTransitioning = true;
+                StartCoroutine(CameraFollow.Transition(VerticalTransTimeUp));                                                  // Fix timer
+                float t = (GameManager.currentRoofHeight - paddle.transform.position.y) + 0.5f;
+                Debug.Log("GOING UP: " + t);
+                paddleMove.baseYPos += t;
+                paddleMove.currentYPos += t;
+                paddleMove.maxFlipHeight += t;
+                if ((int)GameManager.GetCurrentLayer().GetComponent<LocalRoomData>().localRoomData.z != 3) {
+                    GameManager.curHeight += (10 + GameManager.GetCurrentLayer().GetComponent<LocalRoomData>().localRoomData.y);
+                } else {
+                    GameManager.curHeight += 10;
+                }
                 GameManager.currentBoardRow += 1;
-                paddleMove.baseYPos += 10;
-                paddleMove.currentYPos += 10;
-                paddleMove.maxFlipHeight += 10;
+                Debug.Log("CHECK totalRows: " + GameManager.currentRoofHeight);
 
+                transform.position = new Vector3(transform.position.x, transform.position.y + 0.3f, 0f);                                                                    // Fix
                 if (currentSpeed > 10) {
                     currentSpeed = 10;
                 }
 
                 Vector2 roomAbove = new Vector2(GameManager.currentBoardColumn, GameManager.currentBoardRow);
                 UpdateRoomHistory(roomAbove);
-                GameManager.isTransitioning = false;
+                //GameManager.isTransitioning = false;
 
-                foreach(GameObject ball in GameManager.ActiveBalls) {
-                    ball.transform.position = new Vector3(GameManager.ActiveBalls[0].transform.position.x, GameManager.ActiveBalls[0].transform.position.y, 0f);
+                foreach (GameObject ball in GameManager.ActiveBalls) {
+                    Vector2 oldDir = ball.GetComponent<BallMovement>().moveDir;
+                    ball.transform.position = new Vector3(GameManager.ActiveBalls[0].transform.position.x, GameManager.ActiveBalls[0].transform.position.y + 0.3f, 0f);
+                    ball.GetComponent<BallMovement>().moveDir = oldDir; // restore
                 }
             } else {
                 moveDir.y *= -1;
             }
-        } else if (transform.position.y < paddleMove.baseYPos - 1.1f && GameManager.currentBoardRow > 0 && (GameManager.isShiftingDown || GameManager.levelLayers[GameManager.currentBoardRow - 1, GameManager.currentBoardColumn] == null)) {
+        }
+        
+        // DELETE BALL IF NO LOWER ROOM
+        else if (transform.position.y < paddleMove.baseYPos - 1.1f && GameManager.currentBoardRow > 0 && (GameManager.isShiftingDown || GameManager.levelLayers[GameManager.currentBoardRow - 1, GameManager.currentBoardColumn] == null)) {
             int activeBallCount = ballCountCheck();
             if (activeBallCount > 1) {
                 gameObject.SetActive(false);
             } else {
                 Destroy(gameObject);
             }
+        }
 
-        } else if (transform.position.y < paddleMove.baseYPos - 1.1f && GameManager.currentBoardRow > 0) { // Try to move DOWN a board - Only allow if roof is NOT scrolling
-
+        // TRANSITION DOWN
+        else if (transform.position.y < paddleMove.baseYPos - 1.1f && GameManager.currentBoardRow > 0) {
             if (!GameManager.isShiftingDown && gameObject == GameManager.ActiveBalls[0].gameObject) {
-
                 GameObject roomBelowObj = GameManager.levelLayers[GameManager.currentBoardRow - 1, GameManager.currentBoardColumn];
                 if (roomBelowObj != null) {
                     LocalRoomData roomBelowData = roomBelowObj.GetComponent<LocalRoomData>();
-                    if (roomBelowData != null && roomBelowData.localRoomData.y > 0) {
-                        // Room below has Y > 0, destroy the ball
-                        Debug.Log("Ball destroyed - room below has Y > 0");
+
+                    if (roomBelowData != null && (int)roomBelowData.localRoomData.z == 3 && (int)roomBelowData.localRoomData.y > 0) {
+                        Debug.Log("[Down test] Deleting Ball bc next room is an auto-scroller. roomBelowData Z: " + roomBelowData.localRoomData.z);
                         Destroy(gameObject);
                         return;
                     }
-                }
 
-                StartCoroutine(TransitionCoroutine());
-                Debug.Log("GOING DOWN");
+                    CameraFollow.RoomTransitioning = true;
+                    StartCoroutine(CameraFollow.Transition(VerticalTransTimeDown));                                                  // Fix timer
+                    // Use the same logic as "going up" but inverted
+                    if ((int)roomBelowData.localRoomData.z == 4) {
+                        GameManager.curHeight -= 10 + roomBelowData.localRoomData.y;
+                    } else {
+                        GameManager.curHeight -= 10;
+                    }
 
-                GameManager.currentBoardRow -= 1;
-                paddleMove.baseYPos -= 10;
-                paddleMove.currentYPos -= 10;
-                paddleMove.maxFlipHeight -= 10;
+                    GameManager.currentBoardRow -= 1;
 
-                if (currentSpeed > 10) {
-                    currentSpeed = 10;
-                }
+                    // Always: 10 + target room’s Y offset
+                    float paddleStep = 10f + roomBelowData.localRoomData.y;
+                    Debug.Log($"GOING DOWN -> NextRow = {GameManager.currentBoardRow - 1}, Offset = {roomBelowData.localRoomData.y}, PaddleStep = {paddleStep}");
+                    paddleMove.baseYPos -= paddleStep;
+                    paddleMove.currentYPos -= paddleStep;
+                    paddleMove.maxFlipHeight -= paddleStep;
 
-                Vector2 roomBelow = new Vector2(GameManager.currentBoardColumn, GameManager.currentBoardRow);
-                UpdateRoomHistory(roomBelow);
-                GameManager.isTransitioning = false;
-                foreach (GameObject ball in GameManager.ActiveBalls) {
-                    ball.transform.position = new Vector3(GameManager.ActiveBalls[0].transform.position.x, GameManager.ActiveBalls[0].transform.position.y, 0f);
+                    if (currentSpeed > 10) {
+                        currentSpeed = 10;
+                    }
+
+                    Vector2 roomBelow = new Vector2(GameManager.currentBoardColumn, GameManager.currentBoardRow);
+                    UpdateRoomHistory(roomBelow);
+
+                    GameManager.isTransitioning = false;
+
+                    foreach (GameObject ball in GameManager.ActiveBalls) {
+                        Vector2 oldDir = ball.GetComponent<BallMovement>().moveDir;
+                        ball.transform.position = new Vector3(
+                            GameManager.ActiveBalls[0].transform.position.x,
+                            GameManager.ActiveBalls[0].transform.position.y - 1f,
+                            0f
+                        );
+                        ball.GetComponent<BallMovement>().moveDir = oldDir;
+                    }
                 }
             } else {
                 Destroy(gameObject);
             }
         }
+
+
         // Reset position if Vertically out of bounds - Only allow if roof is NOT scrolling
-        if (transform.position.y > paddleMove.baseYPos + 10 && GameManager.currentBoardRow == totalRows - 1 && !GameManager.isShiftingDown && !GameManager.isTransitioning) {
+        /*if (transform.position.y > paddleMove.baseYPos + GameManager.currentRoofHeight && GameManager.currentBoardRow == totalRows - 1 && !GameManager.isShiftingDown && !GameManager.isTransitioning) {
             transform.position = new Vector3(0, currentLayer.transform.position.y);
             moveDir.y = -1;
             moveDir.x = 0;
-        }
+        }*/
 
         // EARLY RETURN FOR ROOF SCROLLING - After handling upward rebound
         if (GameManager.isShiftingDown) {
@@ -303,8 +402,8 @@ public class BallMovement : MonoBehaviour {
 
         float roomCenterX = currentLayer.transform.position.x;
         float roomHalfWidth = 7.3f + roomData.localRoomData.x;
-
-        // If outside of Horizontally out of bounds - Right Side Paul Mcartny
+        // If outside of Horizontally out of bounds Paul Mcartny
+        // RIGHT SIDE TRANSITION
         if (transform.position.x >= roomCenterX + roomHalfWidth + 1f && !GameManager.ceilinigDestroyed) {
             if (gameObject == GameManager.ActiveBalls[0].gameObject) {
 
@@ -322,7 +421,7 @@ public class BallMovement : MonoBehaviour {
                     moveDir = new Vector2(0, -1); // reset
                 } else if (GameManager.currentBoardColumn < 2) {
                     GameManager.currentBoardColumn++;
-                    
+                    StartCoroutine(CameraFollow.Transition(HorizontalTransTime));
 
                     // --- TELEPORT THE PADDLE ---
                     if (paddleMove != null) {
@@ -358,7 +457,7 @@ public class BallMovement : MonoBehaviour {
             }
         }
 
-        // --- LEFT SIDE TRANSITION ---
+        // LEFT SIDE TRANSITION
         if (transform.position.x <= roomCenterX - roomHalfWidth - 1f && !GameManager.ceilinigDestroyed) {
             if (gameObject == GameManager.ActiveBalls[0].gameObject) {
                 isHorizontalTransitioning = true;
@@ -372,6 +471,7 @@ public class BallMovement : MonoBehaviour {
                     moveDir = new Vector2(0, -1); // reset
                 } else if (GameManager.currentBoardColumn > 0) {
                     GameManager.currentBoardColumn--;
+                    StartCoroutine(CameraFollow.Transition(HorizontalTransTime));
                     if (currentSpeed > 10) {
                         currentSpeed = 10;
                     }
@@ -404,20 +504,11 @@ public class BallMovement : MonoBehaviour {
             }
         }
 
-        // --- Update brick container while ignoring Z3 bricks ---
+        // Update brick container while ignoring Z3 bricks
         Transform blockListTransform = currentLayer.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name.StartsWith("BlockList"));
         if (blockListTransform != null) {
             GameManager.brickContainer = blockListTransform.gameObject;
         }
-    }
-
-    private IEnumerator TransitionCoroutine() {
-        GameManager.isTransitioning = true;
-
-        // Do transition logic here
-        yield return new WaitForSeconds(1f); // Wait for transition to complete
-
-        GameManager.isTransitioning = false;
     }
 
     private void UpdateRoomHistory(Vector2 newRoom) {
@@ -440,6 +531,8 @@ public class BallMovement : MonoBehaviour {
     #region Collisions
     private void CheckPaddleCollision() {
         bool inVerticalRange = transform.position.y < paddle.transform.position.y + 0.13f && transform.position.y > paddle.transform.position.y - 0.13f;
+        //bool inVerticalRange = transform.position.y < paddle.transform.position.y + 0.3f && transform.position.y > paddle.transform.position.y - 0.3f;
+
         bool inHorizontalRange = transform.position.x > paddle.transform.position.x - paddle.transform.localScale.x / 2.2f && transform.position.x < paddle.transform.position.x + paddle.transform.localScale.x / 2.2f;
         //Debug.Log("Between: " + (paddle.transform.position.x - paddle.transform.localScale.x / 2.2f) + " & " + paddle.transform.position.x + paddle.transform.localScale.x / 2.2f);
 
@@ -453,8 +546,24 @@ public class BallMovement : MonoBehaviour {
                     stickOffsetY = offset; // Maintain the same vertical spacing
                 }
             }
-            paddleOffsetX = transform.position.x - paddle.transform.position.x;
-            PaddleBounce();
+
+            if (GameManager.ActiveBalls[0] != null && gameObject == GameManager.ActiveBalls[0].gameObject) {
+                Debug.Log($"{gameObject.name} - COLLISION SUCCESS - Processing paddle hit");
+                paddleOffsetX = transform.position.x - paddle.transform.position.x;
+                PaddleBounce();
+            } else {
+                SecondaryBallPaddleBounce();
+            }
+        }
+
+        
+
+        if (!inVerticalRange || !inHorizontalRange || moveDir.y != -1) {
+            Debug.Log($"{gameObject.name} - Collision FAILED: " +
+                     $"V={inVerticalRange} (ballY:{transform.position.y:F3}, paddleY:{paddle.transform.position.y:F3}), " +
+                     $"H={inHorizontalRange} (ballX:{transform.position.x:F3}, paddleX:{paddle.transform.position.x:F3}), " +
+                     $"Dir={moveDir.y} (moveDir.y:{moveDir.y}), " +
+                     $"Stuck={isStuckToPaddle}, Trans={isHorizontalTransitioning}");
         }
     }
 
@@ -480,7 +589,7 @@ public class BallMovement : MonoBehaviour {
         float rightBoundary = roomPosition.x + halfWidth;
 
         if (transform.position.x >= rightBoundary || transform.position.x <= leftBoundary) {
-            Debug.Log($"Bounce! posX={transform.position.x}, bounds=({leftBoundary}, {rightBoundary}), roomPosX={roomPosition.x}");
+            //Debug.Log($"Bounce! posX={transform.position.x}, bounds=({leftBoundary}, {rightBoundary}), roomPosX={roomPosition.x}");
             bounce(true);
         }
     }
@@ -538,6 +647,10 @@ public class BallMovement : MonoBehaviour {
 
 
     private void OnCollisionEnter2D(Collision2D collision) {
+        if (gameObject == GameManager.ActiveBalls[0].gameObject && collision.gameObject.CompareTag("Ball")) {
+            return;
+        }
+
         GameObject currentLayer = GameManager.GetCurrentLayer();
         if (currentLayer == null) return;
         if (collision.contactCount == 0 || collisionProcessedThisFrame) return;
@@ -548,8 +661,7 @@ public class BallMovement : MonoBehaviour {
         float angle = Vector2.Angle(normal, Vector2.up);
 
         // RoofPiece collision check
-        if (collision.gameObject.name.StartsWith("RoofPiece")) {
-            Debug.Log("Clip prevention");
+        if (collision.gameObject.name.StartsWith("RoofPiece") || collision.gameObject.name.EndsWith("Wall")) {
 
             Transform boardTransform = collision.transform.parent; // RoofPiece parent = Board
 
@@ -581,6 +693,22 @@ public class BallMovement : MonoBehaviour {
         }
     }
 
+    public bool IsObjectInViewport() {
+        // Get the main camera
+        Camera mainCamera = Camera.main;
+
+        if (mainCamera == null) {
+            Debug.LogWarning("Main camera not found!");
+            return false;
+        }
+
+        // Convert the object's world position to viewport coordinates
+        Vector3 viewportPosition = mainCamera.WorldToViewportPoint(transform.position);
+
+        // Check if the object is within the camera's viewport (0-1 range)
+        bool isInViewport = viewportPosition.x >= 0 && viewportPosition.x <= 1 && viewportPosition.y >= -0.5 && viewportPosition.y <= 1.5 && viewportPosition.z > 0; // z > 0 means in front of camera
+        return isInViewport;
+    }
 
     public void roofCheck() {
         if (moveDir.y <= 0 || GameManager.isTransitioning || isStuckToPaddle) return;
@@ -598,7 +726,7 @@ public class BallMovement : MonoBehaviour {
         foreach (Vector2 origin in rayOrigins) {
             RaycastHit2D hit = Physics2D.Raycast(origin, Vector2.up, rayDistance);
             if (hit.collider != null && hit.collider.gameObject.name.StartsWith("RoofPiece")) {
-                Debug.Log("Roof hit detected via raycast");
+                //Debug.Log("Roof hit detected via raycast");
                 moveDir.y = -1;
                 GameManager.Instance.PlaySFX(GameManager.Instance.ballBounceSound);
                 return; // Only need to detect one hit
@@ -606,15 +734,25 @@ public class BallMovement : MonoBehaviour {
         }
     }
 
+    private void OnTriggerExit2D(Collider2D collision) {
+        if (collision.gameObject.CompareTag("Player")) {
+            curPaddleMagnetVolume = null;
+            Debug.Log("WORKED");
+        }
+    }
+
     private void OnTriggerEnter2D(Collider2D collision) {
+        if (collision.gameObject.CompareTag("Player")) {
+            curPaddleMagnetVolume = collision;
+            Debug.Log("WORKED");
+        }
+
+
+
         if (collision.gameObject.CompareTag("XTransition") && !GameManager.IsGameStart && !isStuckToPaddle) {
             //Debug.Log("Hitting XTrans");
             if (gameObject != GameManager.ActiveBalls[0].gameObject) {
                 return;
-            }
-
-            if (currentSpeed > 5) {
-                currentSpeed = 5;
             }
 
             // FREEZE THE BALL IMMEDIATELY FOR HORIZONTAL TRANSITION
@@ -625,14 +763,11 @@ public class BallMovement : MonoBehaviour {
                 Debug.Log("[XTransition] Canceling roof scroll before horizontal transition");
                 //GameManager.CancelRoofTransition();
             }
-
+    
+            CameraFollow.RoomTransitioning = true;
             
-
-            // MARK THAT WE NEED FAST SCROLLING AFTER HORIZONTAL TRANSITION
-            GameManager.needsFastRoofScroll = true;
             GameManager.lastHorizontalTransitionTime = Time.time;
 
-            StartCoroutine(TransitionCoroutine());
             //Debug.Log("[HRT]: " + GameManager.isTransitioning);
 
             LocalRoomData roomData = GameManager.GetCurrentLayer().GetComponent<LocalRoomData>();
@@ -675,16 +810,20 @@ public class BallMovement : MonoBehaviour {
             if (transform.position.x < partner.transform.position.x) { // Coming from left
                 transform.position = new Vector3(partner.transform.position.x + 1f, partner.transform.position.y, 0f);
                 moveDir = new Vector2(0.5f, 1f); // Set the preset direction
-                dir = 0.5f;
+                dir = 1;
             } else { // Coming from right
                 transform.position = new Vector3(partner.transform.position.x - 1f, partner.transform.position.y, 0f);
                 moveDir = new Vector2(-0.5f, 1f); // Set the preset direction
-                dir = -0.5f;
+                dir = -1;
             }
             foreach (GameObject ball in GameManager.ActiveBalls) {
                 ball.transform.position = GameManager.ActiveBalls[0].transform.position;
-                ball.GetComponent<BallMovement>().currentSpeed = 1f;
+                if (ball.GetComponent<BallMovement>().currentSpeed > 5f) {
+                    ball.GetComponent<BallMovement>().currentSpeed = 3f;
+                }
                 ball.GetComponent<BallMovement>().moveDir.y = 1;
+                ball.GetComponent<BallMovement>().velocity.y = 6.5f;
+                ball.GetComponent<BallMovement>().velocity.x = dir * Random.Range(1, 6);
                 //ball.GetComponent<BallMovement>().moveDir.x = dir;
             }
             //Debug.Log("Warped ball to: " + transform.position);
@@ -759,8 +898,10 @@ public class BallMovement : MonoBehaviour {
     }
 
     public void MegaBall() {
-        transform.localScale = new Vector3(transform.localScale.x * 2, transform.localScale.y * 2, 1f);
-        GameManager.GravityBall = false;
+        if (transform.localScale.x < maxMegaScale) {
+            transform.localScale = new Vector3(transform.localScale.x * 2, transform.localScale.y * 2, 1f);
+            GameManager.GravityBall = false;
+        }
     }
 
     public void ShrinkBall() {
@@ -834,6 +975,28 @@ public class BallMovement : MonoBehaviour {
 
     private void HandleBouncePhysics(float angle, GameObject collidedObject) {
         if (!collidedObject.CompareTag("Player")) {
+            GameManager.Instance.PlaySFX(GameManager.Instance.ballBounceSound);
+
+            if (angle <= floorAngleThreshold || angle >= 180f - floorAngleThreshold) {
+                // Vertical bounce (floor/ceiling)
+                if (GameManager.ActiveBalls[0] != null && gameObject != GameManager.ActiveBalls[0].gameObject) {
+                    // For secondary balls using physics, reverse Y velocity
+                    velocity.y *= -1;
+                }
+                moveDir.y *= -1;
+            } else {
+                // Horizontal bounce (walls)
+                if (GameManager.ActiveBalls[0] != null && gameObject != GameManager.ActiveBalls[0].gameObject) {
+                    // For secondary balls using physics, reverse X velocity
+                    velocity.x *= -1;
+                }
+                moveDir.x *= -1;
+            }
+        }
+    }
+
+    /*private void HandleBouncePhysics(float angle, GameObject collidedObject) {
+        if (!collidedObject.CompareTag("Player")) {
             //Debug.Log("Collided with: " + collidedObject.name);
             GameManager.Instance.PlaySFX(GameManager.Instance.ballBounceSound);
 
@@ -843,7 +1006,7 @@ public class BallMovement : MonoBehaviour {
                 moveDir.x *= -1;
             }
         }
-    }
+    }*/
 
     public void PaddleBounce() {
         //Debug.Log("Collided with: Paddle");
@@ -868,6 +1031,33 @@ public class BallMovement : MonoBehaviour {
         } else {
             //Debug.Log($"Speed: {currentSpeed}");
         }
+    }
+
+    private void SecondaryBallPaddleBounce() {
+        GameManager.Instance.PlaySFX(GameManager.Instance.paddleBounceSound); 
+        
+        // Calculate bounce angle based on where ball hit paddle (same as primary balls)
+        paddleOffset = paddle.transform.position.x - transform.position.x;
+        Vector2 newDirection = new Vector2(-(paddleOffset / 1.1f), 1f).normalized;
+        velocity = newDirection * Mathf.Max(currentSpeed, 5f);
+        moveDir = newDirection;
+        PaddleMove paddleMove = paddle.GetComponent<PaddleMove>();
+
+        // Position adjustment for flipping paddle
+        if (paddle.transform.position.y != -3.8f && paddleMove.flipping) {
+            transform.position = new Vector3(transform.position.x, paddle.transform.position.y, 0);
+        }
+
+        if (paddleMove.recoilSpeed > 5) {
+            velocity = velocity.normalized * paddleMove.recoilSpeed;
+            currentSpeed = paddleMove.recoilSpeed;
+            accelerationDrag = 1.8f;
+        }
+
+        // SFX Check
+        if (currentSpeed >= 14f && paddleMove.flipping && paddleMove.recoilSpeed >= 14f) {
+            GameManager.Instance.PlaySFX(GameManager.Instance.perfectFlipSound);
+        }        
     }
     #endregion
 }

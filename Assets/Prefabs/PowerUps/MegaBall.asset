@@ -14,5 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   itemName: Mega Ball
   overlaySprite: {fileID: 0}
-  prefab: {fileID: 7440528752259438312, guid: d45d40d7c5251aa4aa250203d256a453, type: 3}
-  dropRate: 4
+  prefab: {fileID: 4747788610326373369, guid: 537e8b6b1c2a28f40adac85d58a02344, type: 3}
+  dropRate: 10
+  script: {fileID: 11500000, guid: d1358364c83d0a9439c4b38328314da6, type: 3}

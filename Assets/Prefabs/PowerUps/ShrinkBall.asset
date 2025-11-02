@@ -14,5 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   itemName: Shrink Ball
   overlaySprite: {fileID: 0}
-  prefab: {fileID: 4167734399192098477, guid: 649be43f4749470429ccd715e8900412, type: 3}
+  prefab: {fileID: 4747788610326373369, guid: 537e8b6b1c2a28f40adac85d58a02344, type: 3}
   dropRate: 8
+  script: {fileID: 11500000, guid: db6f4fc9592c27e4c9369f2042914d60, type: 3}

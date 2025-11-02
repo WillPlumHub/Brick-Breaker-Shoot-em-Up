@@ -24,6 +24,10 @@ public class MapShip : MonoBehaviour {
     private Vector3 cameraOffset = new Vector3(0, 0, -10f);
     private Transform cameraTransform;
 
+    [Header("Collision Detection")]
+    public float wallCheckDistance = 1f;
+    private bool pathBlocked = false;
+
     [Header("Idle Camera Recentering")]
     public float idleThreshold = 0.3f; // Time before recentring
     public float recenterSpeed = 4f; // How quickly the camera recenters when idle
@@ -61,6 +65,7 @@ public class MapShip : MonoBehaviour {
         movement();
         cameraFollow();
         AdjustTriggerToCameraEdges();
+
     }
 
     void DetectControlType() {
@@ -136,11 +141,11 @@ public class MapShip : MonoBehaviour {
     }
 
     public void generalMove() {
-        if (inputDown && !disabled) {
+        // Start Flip
+        if (inputDown && !disabled && !pathBlocked) {
             idleTimer = 0f;
             originalPosition = transform.position;
 
-            // Start flip
             Vector3 dir = (inputPosition - originalPosition).normalized;
             targetPosition = originalPosition + dir * flipLength;
 
@@ -151,52 +156,52 @@ public class MapShip : MonoBehaviour {
             moving = false;
         }
 
-        // Start moving directly if in trigger and input is held
-        if (disabled && inputHeld && !flipping && !moving) {
-            idleTimer = 0f;
-            movementSpeedTimer = 0f;
-            moving = true;
-        }
-
-        if (flipping && inputUp) { // Handle early release during flip
-            idleTimer = 0f;
-            movementSpeedTimer = 0f;
-
-            // Cancel flip, return to original
-            targetPosition = originalPosition;
-            currentSpeed = burstSpeed;
-        }
-        
-        if (flipping && Vector3.Distance(transform.position, targetPosition) < 0.01f) { // Detect flip completion
-            flipping = false;
-
-            if (inputHeld) { // Begin movement if still holding
-                moving = true;
-                movementSpeedTimer = 0f;
-            } else { // Flip ended and not holding — stay idle
+        // Handle Flip
+        if (flipping) {
+            if (pathBlocked) {
+                // Cancel flip if wall detected
+                flipping = false;
                 moving = false;
+                currentSpeed = 0f;
+                targetPosition = transform.position;
+            } else if (inputUp) { // Early release
+                targetPosition = originalPosition;
+                movementSpeedTimer = 0f;
+                currentSpeed = burstSpeed;
+            } else if (Vector3.Distance(transform.position, targetPosition) < 0.01f) { // Flip completed
+                flipping = false;
+                if (inputHeld) {
+                    moving = true;
+                    movementSpeedTimer = 0f;
+                } else {
+                    moving = false;
+                }
             }
         }
 
-        if (moving && inputHeld) { // Movement logic
+        // Start Moving
+        if (!flipping && inputHeld && !disabled && !pathBlocked) {
             idleTimer = 0f;
-
+            moving = true;
             movementSpeedTimer += Time.deltaTime;
+
             float t = Mathf.Clamp01(movementSpeedTimer / speedSmoothTime);
             currentSpeed = Mathf.Lerp(0f, moveSpeed, t);
 
             targetPosition = inputPosition;
         }
-        
-        if (moving && inputUp) { // Stop moving on release
-            idleTimer = 0f;
-            movementSpeedTimer = 0f;
+
+        // Stop Moving
+        if (moving && (inputUp || pathBlocked)) {
             moving = false;
+            currentSpeed = 0f;
+            movementSpeedTimer = 0f;
         }
     }
 
     public void movement() {
-        if (flipping || moving && !disabled) {
+        // Move only if not blocked
+        if ((flipping || moving) && !disabled && !pathBlocked) {
             transform.position = Vector3.MoveTowards(transform.position, targetPosition, currentSpeed * Time.deltaTime);
         }
     }
@@ -272,7 +277,13 @@ public class MapShip : MonoBehaviour {
 
     public void OnCollisionEnter2D(Collision2D collision) {
         if (collision.gameObject.CompareTag("Wall")) {
-            
+            pathBlocked = true;
+        }
+    }
+
+    public void OnCollisionExit2D(Collision2D collision) {
+        if (collision.gameObject.CompareTag("Wall")) {
+            pathBlocked = false;
         }
     }
 }

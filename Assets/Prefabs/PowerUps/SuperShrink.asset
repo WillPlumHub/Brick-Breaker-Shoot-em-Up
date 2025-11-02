@@ -14,5 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   itemName: Super Shrink
   overlaySprite: {fileID: 0}
-  prefab: {fileID: 5626256573080570564, guid: b89f1869f89f76d4187534c8ca5cacec, type: 3}
+  prefab: {fileID: 4747788610326373369, guid: 537e8b6b1c2a28f40adac85d58a02344, type: 3}
   dropRate: 8
+  script: {fileID: 11500000, guid: 3cb9d66b44fdf7549afcfddcd6f3685e, type: 3}

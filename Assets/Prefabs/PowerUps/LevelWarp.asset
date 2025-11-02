@@ -14,5 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   itemName: Level Warp
   overlaySprite: {fileID: 0}
-  prefab: {fileID: 8931825181115258958, guid: 554d0993276b84b41a3665ec2cf9df48, type: 3}
+  prefab: {fileID: 4747788610326373369, guid: 537e8b6b1c2a28f40adac85d58a02344, type: 3}
   dropRate: 0.2
+  script: {fileID: 11500000, guid: c8877eda8514dc5408e7bcb62f18629f, type: 3}

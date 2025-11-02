@@ -14,6 +14,27 @@ public class GameManager : MonoBehaviour {
 
     public static GameManager Instance { get; private set; } // Singleton instance
 
+
+
+    // Static References (persistent throughout level)
+    public static GameObject Paddle { get; private set; }
+    public static PaddleMove PaddleMove { get; private set; }
+    public static Camera MainCamera { get; private set; }
+    public static LevelBuilder LevelBuilder { get; private set; }
+
+    // Dynamic References (change during gameplay)
+    public static GameObject CurrentRoom { get; private set; }
+    public static LocalRoomData CurrentRoomData { get; private set; }
+    public static Transform CurrentRoof { get; private set; }
+    public static GameObject BrickContainer { get; private set; }
+    public static Transform LeftWall { get; private set; }
+    public static Transform RightWall { get; private set; }
+
+    // Room-specific boundaries (recalculated when room changes)
+    public static float LeftBoundary { get; private set; }
+    public static float RightBoundary { get; private set; }
+
+
     [Header("Game state")]
     public int score;
     public TMP_Text scoreText;
@@ -28,6 +49,7 @@ public class GameManager : MonoBehaviour {
     public static float DisableTimer;
     public static float MagnetOffset;
     public static float DecelerationRate;
+    //public static GameObject Paddle;
 
     [Header("Balls")]
     public GameObject ballPrefab;
@@ -79,6 +101,13 @@ public class GameManager : MonoBehaviour {
     public static int lastMainBoard;
     public int lastmainmoard; // Debug
 
+    public static float currentRoofHeight;
+    public float CurrentRoofHeight; // Debug
+    public static bool cameraMoving = false;
+    public bool CameraMoving = false; // Debug
+    public static float curHeight = 0;
+    public float CurHeight = 0;
+
 
     [Header("Power Ups")]
     public bool brickThu = false;
@@ -100,24 +129,154 @@ public class GameManager : MonoBehaviour {
     public AudioClip perfectFlipSound;
     public AudioClip flipSound;
 
+    [Header("Audio")]
+    public Animator transition;
+    public float transitionTime = 1f;
+
     [Header("Debug")]
     public bool DebugMode = false;
     public TMP_Text DebugInfo;
 
-    #region Set up
-    private void Awake() {
-        GameObject levelManagerObj = GameObject.Find("LevelManager");
-        if (levelManagerObj == null) {
-            Debug.LogWarning("LevelManager GameObject not found.");
+    #region Universal Reference Management
+    public static void RefreshAllReferences() {
+        RefreshStaticReferences();
+        RefreshDynamicRoomReferences();
+    }
+
+    public static void RefreshStaticReferences() {
+        // These only need to be found once per scene
+        Paddle = GameObject.Find("Paddle");
+        Debug.Log("[CUR] Paddle: " + Paddle.gameObject.name);
+        if (Paddle != null) {
+            PaddleMove = Paddle.GetComponent<PaddleMove>();
+            Debug.Log($"[GameManager] Paddle reference refreshed: {Paddle.name}");
         } else {
-            LevelBuilder levelBuilder = levelManagerObj.GetComponent<LevelBuilder>();
-            if (levelBuilder == null) {
-                Debug.LogWarning("LevelBuilder component not found on LevelManager.");
-            } else if (levelBuilder.levelData == null) {
-                Debug.LogWarning("No LevelData assigned in LevelBuilder.");
+            PaddleMove = null;
+            Debug.LogWarning("[GameManager] Paddle not found in scene");
+        }
+
+        if (MainCamera == null) {
+            MainCamera = Camera.main;
+            if (MainCamera != null) {
+                Debug.Log($"[GameManager] Camera reference refreshed: {MainCamera.name}");
+            } else {
+                Debug.LogWarning("[GameManager] Main camera not found");
             }
         }
 
+        if (LevelBuilder == null) {
+            GameObject levelManagerObj = GameObject.Find("LevelManager");
+            if (levelManagerObj != null) {
+                LevelBuilder = levelManagerObj.GetComponent<LevelBuilder>();
+                Debug.Log($"[GameManager] LevelBuilder reference refreshed");
+            } else {
+                LevelBuilder = null;
+                Debug.LogWarning("[GameManager] LevelManager not found");
+            }
+        }
+    }
+
+    public static void RefreshDynamicRoomReferences() {
+        // These change as player moves between rooms
+        GameObject newRoom = GetCurrentLayer();
+
+        // Only update if room actually changed
+        if (newRoom != CurrentRoom) {
+            CurrentRoom = newRoom;
+
+            if (CurrentRoom != null) {
+                CurrentRoomData = CurrentRoom.GetComponent<LocalRoomData>();
+                CurrentRoof = CurrentRoom.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name.StartsWith("Roof"));
+                BrickContainer = FindBrickContainer(CurrentRoom);
+                FindWallReferences(CurrentRoom);
+                CalculateRoomBoundaries();
+
+                Debug.Log($"[GameManager] Room references updated: {CurrentRoom.name}");
+            } else {
+                CurrentRoomData = null;
+                CurrentRoof = null;
+                BrickContainer = null;
+                LeftWall = null;
+                RightWall = null;
+                Debug.LogWarning("[GameManager] Current room not found");
+            }
+        }
+    }
+
+    public static void ForceRefreshRoomReferences() {
+        // Force update even if room is the same (for when room contents change)
+        CurrentRoom = GetCurrentLayer();
+        if (CurrentRoom != null) {
+            CurrentRoomData = CurrentRoom.GetComponent<LocalRoomData>();
+            CurrentRoof = CurrentRoom.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name.StartsWith("Roof"));
+            BrickContainer = FindBrickContainer(CurrentRoom);
+            FindWallReferences(CurrentRoom);
+            CalculateRoomBoundaries();
+            Debug.Log($"[GameManager] Room references force-refreshed: {CurrentRoom.name}");
+        }
+    }
+
+    private static void FindWallReferences(GameObject room) {
+        LeftWall = null;
+        RightWall = null;
+
+        foreach (Transform child in room.transform) {
+            if (child.name.StartsWith("LWall")) {
+                LeftWall = child;
+            } else if (child.name.StartsWith("RWall")) {
+                RightWall = child;
+            }
+        }
+    }
+
+    private static void CalculateRoomBoundaries() {
+        if (LeftWall != null && RightWall != null && Paddle != null) {
+            float leftWallHalfWidth = LeftWall.localScale.x / 2f;
+            float rightWallHalfWidth = RightWall.localScale.x / 2f;
+            float paddleHalfWidth = Paddle.transform.localScale.x / 2f;
+
+            LeftBoundary = LeftWall.position.x + leftWallHalfWidth + paddleHalfWidth;
+            RightBoundary = RightWall.position.x - rightWallHalfWidth - paddleHalfWidth;
+
+            Debug.Log($"[GameManager] Room boundaries calculated: L={LeftBoundary:F2}, R={RightBoundary:F2}");
+        } else {
+            // Fallback to camera boundaries
+            if (MainCamera != null) {
+                float roomCenterX = CurrentRoom != null ? CurrentRoom.transform.position.x : 0f;
+                float camHalfHeight = MainCamera.orthographicSize;
+                float camHalfWidth = camHalfHeight * MainCamera.aspect;
+                float paddleHalfWidth = Paddle != null ? Paddle.transform.localScale.x / 2f : 0.5f;
+
+                LeftBoundary = roomCenterX - camHalfWidth + paddleHalfWidth;
+                RightBoundary = roomCenterX + camHalfWidth - paddleHalfWidth;
+            }
+        }
+    }
+
+    private static GameObject FindBrickContainer(GameObject room) {
+        if (room == null) return null;
+        Transform blockListTransform = room.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name.StartsWith("BlockList"));
+        return blockListTransform != null ? blockListTransform.gameObject : null;
+    }
+
+    // Public method to update room position (call this when player changes rooms)
+    public static void UpdateRoomPosition(int newRow, int newColumn) {
+        currentBoardRow = newRow;
+        currentBoardColumn = newColumn;
+        RefreshDynamicRoomReferences(); // This will detect the room change and update references
+    }
+
+    // Call this when bricks are destroyed/added to force brick count refresh
+    public static void RefreshBrickContainer() {
+        if (CurrentRoom != null) {
+            BrickContainer = FindBrickContainer(CurrentRoom);
+        }
+    }
+    #endregion
+
+
+    #region Set up
+    private void Awake() {
         HandleSingleton();
         InitializeAudio();
         SceneManager.sceneLoaded += OnSceneLoaded;
@@ -138,13 +297,7 @@ public class GameManager : MonoBehaviour {
     }
 
     public void RebuildLevelLayers() {
-        LevelBuilder levelBuilder = GameObject.Find("LevelManager")?.GetComponent<LevelBuilder>();
-
-        if (levelBuilder == null || levelBuilder.CreatedBoards == null) {
-            Debug.LogError("LevelBuilder or CreatedBoards is missing");
-            return;
-        }
-        levelLayers = levelBuilder.CreatedBoards;
+        levelLayers = LevelBuilder.CreatedBoards;
         numberOfBoards = GetTotalBoardCount();
     }
 
@@ -180,6 +333,7 @@ public class GameManager : MonoBehaviour {
         ceilinigDestroyed = false;
         InitializeGame();
 
+        //Paddle = GameObject.Find("Paddle");
         // Rebuild level layers NOW, after LevelBuilder has finished in Awake()
         RebuildLevelLayers();
         boardAmount = GetTotalBoardCount();
@@ -222,20 +376,24 @@ public class GameManager : MonoBehaviour {
         if (DebugMode) {
             Debug.Log("DebugDisabling Score Saving");
         }
-
+                
+        GameObject currentLayer = GetCurrentLayer();
+        LocalRoomData roomData = currentLayer.GetComponent<LocalRoomData>();
+        currentRoofHeight = currentLayer.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name.StartsWith("Roof")).transform.position.y;
+        
+        
         if (Input.GetKeyDown(KeyCode.Escape)) {
             //PrintRoomHistory();
-            LocalRoomData roomData = GetCurrentLayer().GetComponent<LocalRoomData>();
+            roomData = GetCurrentLayer().GetComponent<LocalRoomData>();
             Debug.Log("[CASE 3] Brick Count == " + roomData.numberOfBricks);
         }
-
         /*if (Input.GetKeyDown(KeyCode.Space)) {
             lower();
         }*/
     }
 
     public void transitionCheck() {
-        if (hasLoadedNextLevel || IsGameStart || isRemovingBoard) {
+        if (hasLoadedNextLevel || IsGameStart || isRemovingBoard || levelLayers == null) {
             //Debug.Log($"Transition blocked - hasLoadedNextLevel: {hasLoadedNextLevel}, IsGameStart: {IsGameStart}, isRemovingBoard: {isRemovingBoard}");
             return;
         }
@@ -261,25 +419,30 @@ public class GameManager : MonoBehaviour {
         if (!isShiftingDown && !isTransitioning) {
             Transform roofTransform = currentLayer.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name.StartsWith("Roof"));
             if (roofTransform != null) {
-                float expectedRoofY = -4.5f + (10f * (currentBoardRow + 1f));
-                float roofDelta = roofTransform.position.y - expectedRoofY;
+                float mod = 0;
+                if (roomData.localRoomData.z < 10 || (int)(roomData.localRoomData.z / 10) % 10 == 0) {      // Z = 4
+                    mod = roomData.localRoomData.y;
+                }
+                //float expectedRoofY = -4.5f + ((10f + mod) * (currentBoardRow + 1f));
 
-                if (Mathf.Abs(roofDelta) > 0.1f) {
-                    // CHECK IF WE SHOULD USE FASTER SCROLLING (only if camera is far from current room)
-                    roofScrollSpeedModifier = 1f; // Normal speed
+                if (Paddle != null) {
+                    float expectedRoofY = PaddleMove.baseYPos + 9.5f;
+                    Debug.Log("[TEST] mod: " + CurHeight + ", expextedRoofY: " + expectedRoofY);
+                    float roofDelta = roofTransform.position.y - expectedRoofY;
 
+                    int tensZ = ((int)Mathf.Floor(roomData.localRoomData.z) / 10) % 10;
+                    int onesZ = ((int)Mathf.Floor(roomData.localRoomData.z)) % 10;
 
-                    List<Transform> layersToMove = GetLayersFromRow(currentBoardRow);
-                    if (roofCoroutine != null) StopCoroutine(roofCoroutine);
-
-                    isShiftingDown = true;
-                    //roofCoroutine = StartCoroutine(MovePlayerAndCameraUp(roofDelta, moveSpeed));
-                    StartCoroutine(MoveLayersDown(layersToMove, roofDelta, moveSpeed));
-
-                    // Reset the flag after starting the scroll
-                    needsFastRoofScroll = false;
-
-                    return; // exit early since we're moving layers
+                    if (Mathf.Abs(roofDelta) > 0.1f && !cameraMoving) {
+                        if (roomData.localRoomData.y > 0 && tensZ == 1) {
+                            List<Transform> layersToMove = GetLayersFromRow(currentBoardRow);
+                            if (roofCoroutine != null) StopCoroutine(roofCoroutine);
+                            isShiftingDown = true;
+                            //roofCoroutine = StartCoroutine(MovePlayerAndCameraUp(roofDelta, moveSpeed));
+                            StartCoroutine(MoveLayersDown(layersToMove, roofDelta, moveSpeed));
+                            return; // exit early since we're moving layers
+                        }
+                    }
                 }
             }
         }
@@ -452,20 +615,20 @@ public class GameManager : MonoBehaviour {
                     currentBoardColumn = previousColumn;
 
                     // Adjust paddle position based on vertical movement
-                    GameObject paddle = GameObject.Find("Paddle");
-                    PaddleMove paddleMove = paddle.GetComponent<PaddleMove>();
-                    if (paddleMove != null) {
+                    //GameObject paddle = GameObject.Find("Paddle");
+                    //PaddleMove paddleMove = paddle.GetComponent<PaddleMove>();
+                    if (PaddleMove != null) {
                         if (rowDifference > 0) {
                             // Moving up - add paddle height
-                            paddleMove.baseYPos += 10 * rowDifference;
-                            paddleMove.currentYPos += 10 * rowDifference;
-                            paddleMove.maxFlipHeight += 10 * rowDifference;
+                            PaddleMove.baseYPos += 10 * rowDifference;
+                            PaddleMove.currentYPos += 10 * rowDifference;
+                            PaddleMove.maxFlipHeight += 10 * rowDifference;
                             Debug.Log($"Moving paddle UP by {10 * rowDifference} units");
                         } else if (rowDifference < 0) {
                             // Moving down - subtract paddle height
-                            paddleMove.baseYPos += 10 * rowDifference; // rowDifference is negative
-                            paddleMove.currentYPos += 10 * rowDifference;
-                            paddleMove.maxFlipHeight += 10 * rowDifference;
+                            PaddleMove.baseYPos += 10 * rowDifference; // rowDifference is negative
+                            PaddleMove.currentYPos += 10 * rowDifference;
+                            PaddleMove.maxFlipHeight += 10 * rowDifference;
                             Debug.Log($"Moving paddle DOWN by {10 * -rowDifference} units");
                         }
 
@@ -481,8 +644,8 @@ public class GameManager : MonoBehaviour {
                             }
                             if (leftWall != null && rightWall != null) {
                                 float roomCenterX = (leftWall.position.x + rightWall.position.x) / 2f;
-                                paddleMove.transform.position = new Vector3(roomCenterX, paddleMove.currentYPos, 0f);
-                                Debug.Log($"Centered paddle at X: {roomCenterX}, Y: {paddleMove.currentYPos}");
+                                PaddleMove.transform.position = new Vector3(roomCenterX, PaddleMove.currentYPos, 0f);
+                                Debug.Log($"Centered paddle at X: {roomCenterX}, Y: {PaddleMove.currentYPos}");
                             }
                         }
                     }
@@ -502,12 +665,12 @@ public class GameManager : MonoBehaviour {
             // Reset balls to the new room
             GameObject targetRoomObj = levelLayers[currentBoardRow, currentBoardColumn];
             if (targetRoomObj != null) {
-                Vector3 roomPos = targetRoomObj.transform.position;
-
+                //Vector3 roomPos = targetRoomObj.transform.position;
+                float i = 0f;
                 foreach (var ball in ActiveBalls) {
                     if (ball == null) continue;
-                    ball.transform.position = roomPos;
-
+                    ball.transform.position = new Vector3 (targetRoomObj.transform.position.x + i, targetRoomObj.transform.position.y, 0f);
+                    i += 0.5f;
                     BallMovement ballMove = ball.GetComponent<BallMovement>();
                     if (ballMove != null) {
                         ballMove.currentSpeed = 0.1f;
@@ -599,15 +762,15 @@ public class GameManager : MonoBehaviour {
             }
 
             if (newCurrentRoom != null) {
-                GameObject paddle = GameObject.Find("Paddle");
-                float paddleBaseY = paddle.GetComponent<PaddleMove>().baseYPos;
-                Vector3 spawnPos = new Vector3(newCurrentRoom.transform.position.x, paddleBaseY + 4, newCurrentRoom.transform.position.z);
-
+                //GameObject paddle = GameObject.Find("Paddle");
+                float paddleBaseY = PaddleMove.baseYPos;
+                //Vector3 spawnPos = new Vector3(newCurrentRoom.transform.position.x, paddleBaseY + 4, newCurrentRoom.transform.position.z);
+                float i = 0;
                 foreach (var ball in ActiveBalls) {
                     if (ball == null) continue;
 
-                    ball.transform.position = spawnPos;
-
+                    ball.transform.position = new Vector3(newCurrentRoom.transform.position.x + i, paddleBaseY + 4, newCurrentRoom.transform.position.z);
+                    i += 0.5f;
                     BallMovement ballMove = ball.GetComponent<BallMovement>();
                     if (ballMove != null) {
                         ballMove.currentSpeed = 0.1f;
@@ -729,29 +892,29 @@ public class GameManager : MonoBehaviour {
     
     
     public void expandPaddle() {
-        GameObject paddle = GameObject.Find("Paddle");
-        Vector3 scale = paddle.transform.localScale;
+        //GameObject paddle = GameObject.Find("Paddle");
+        Vector3 scale = Paddle.transform.localScale;
         if (scale.x < 18.4f) {
-            paddle.GetComponent<PaddleMove>().magnetOffset *= 1.2f;
+            PaddleMove.magnetOffset *= 1.2f;
             scale.x *= PaddleSizeMod;
-            paddle.transform.localScale = scale;
+            Paddle.transform.localScale = scale;
         }
     }
 
     public void shrinkPaddle() {
-        GameObject paddle = GameObject.Find("Paddle");
-        Vector3 scale = paddle.transform.localScale;
+        //GameObject paddle = GameObject.Find("Paddle");
+        Vector3 scale = Paddle.transform.localScale;
         if (scale.x > 0.5f) {
-            paddle.GetComponent<PaddleMove>().magnetOffset /= 1.2f;
+            PaddleMove.magnetOffset /= 1.2f;
             scale.x /= PaddleSizeMod;
-            paddle.transform.localScale = scale;
+            Paddle.transform.localScale = scale;
         }
 
     }
 
     public void superShrinkPaddle() {
-        GameObject paddle = GameObject.Find("Paddle");
-        paddle.transform.localScale = new Vector3(0.7407407f, 1.8f, 0.54922f);
+        //GameObject paddle = GameObject.Find("Paddle");
+        Paddle.transform.localScale = new Vector3(0.7407407f, 1.8f, 0.54922f);
     }
 
 
@@ -802,14 +965,21 @@ public class GameManager : MonoBehaviour {
 
         if (powerUps.Count <= 0) {
             Debug.Log("No powerups assigned. Remember to add them to Game Manager!");
+            return;
         }
 
         foreach (PowerUpData powerUp in powerUps) {
-
             cumulative += powerUp.dropRate;
-
             if (odds <= cumulative) {
-                Instantiate(powerUp.prefab, spawnPos, Quaternion.identity);
+                GameObject spawnedPowerUp = Instantiate(powerUp.prefab, spawnPos, Quaternion.identity);
+
+                if (powerUp.script != null) {
+                    System.Type componentType = powerUp.script.GetClass();
+                    if (componentType != null && spawnedPowerUp.GetComponent(componentType) == null) {
+                        spawnedPowerUp.AddComponent(componentType);
+                    }
+                }
+                spawnedPowerUp.name = powerUp.name;
                 //Debug.Log($"Spawned PowerUp: {powerUp.itemName}");
                 return;
             }
@@ -860,20 +1030,18 @@ public class GameManager : MonoBehaviour {
 
     #region Ball Management
     public void SpawnBall() {
-        bool grabbed = false;
         foreach (var ball in ActiveBalls) {
             if (ball != null) {
                 var ballMovement = ball.GetComponent<BallMovement>();
                 if (ballMovement != null && ballMovement.isStuckToPaddle) {
-                    grabbed = true;
                     ballMovement.isStuckToPaddle = false;
                 }
             }
         }
-        float direction = grabbed ? UnityEngine.Random.Range(-1f, 1f) : 1f;
-        GameObject newBall = Instantiate(ballPrefab, new Vector2(ActiveBalls[0].transform.position.x + 0.5f, ActiveBalls[0].transform.position.y), Quaternion.identity);
+        float offset = UnityEngine.Random.Range(-0.3f, 0.3f);
+        GameObject newBall = Instantiate(ballPrefab, new Vector2(ActiveBalls[0].transform.position.x + offset, ActiveBalls[0].transform.position.y), Quaternion.identity);
         newBall.GetComponent<BallMovement>().isStuckToPaddle = false;
-        newBall.GetComponent<BallMovement>().InitializeBall(new Vector2(direction, 1));
+        newBall.GetComponent<BallMovement>().InitializeBall(new Vector2(offset, (ActiveBalls[0].GetComponent<BallMovement>().moveDir.y) * 6.5f));
     }
 
     public void SpawnEightBall() {
@@ -990,14 +1158,26 @@ public class GameManager : MonoBehaviour {
         if (!string.IsNullOrEmpty(nextScene)) {
             hasLoadedNextLevel = true;
             StopAllCoroutines(); // Stop coroutines using old scene data
+            if (CurrentScore >= currentLevelData.HighScore) {
+                currentLevelData.HighScore = CurrentScore;
+            }
             currentPosition = new Vector2(1, 0);
             currentBoardColumn = 1;
             currentBoardRow = 0;
             RoomHistory = new Queue<Vector2>();
             RoomHistory.Enqueue(new Vector2(1, 0));
-            SceneManager.LoadScene(nextScene);
-            numberOfBoards = GameObject.Find("LevelManager").GetComponent<LevelBuilder>().levelData.LevelRooms.Count;
+            
+            if (transition != null) {
+                StartCoroutine(LevelTransition());
+            }            
+            numberOfBoards = LevelBuilder.levelData.LevelRooms.Count;
         }
+    }
+
+    public IEnumerator LevelTransition() {
+        transition.SetTrigger("Start");
+        yield return new WaitForSeconds(transitionTime);
+        SceneManager.LoadScene(nextScene);
     }
     #endregion
 
@@ -1006,10 +1186,13 @@ public class GameManager : MonoBehaviour {
     #region Scene Management
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode) {
         initialBrickCount = 0;
+        currentRoofHeight = 0;
+        curHeight = 0;
         brickCount = 0;
         hasLoadedNextLevel = false;
         brickContainer = null;
         scoreText = null;
+        RefreshAllReferences();
         RebuildLevelLayers();
     }
     #endregion
@@ -1039,10 +1222,13 @@ public class GameManager : MonoBehaviour {
         shiftingDown = isShiftingDown;
         lastmainmoard = lastMainBoard;
         roomHistory = RoomHistory;
-        isTransitioning = istransitioning;
+        istransitioning = isTransitioning;
         currentPosition.y = currentBoardRow;
         currentPosition.x = currentBoardColumn;
         brickLimit = BrickLimit;
+        CurrentRoofHeight = currentRoofHeight;
+        CameraMoving = cameraMoving;
+        CurHeight = curHeight;
     }
 
     public void debugOptions() {
@@ -1061,7 +1247,28 @@ public class GameManager : MonoBehaviour {
             Debug.Log($"Debug Mode: {(DebugMode ? "ON" : "OFF")}");
         }
 
+        //UnityEngine.Cursor.visible = DebugMode;                                                       // Undo for Gold Release
+        if (DebugInfo != null && roomData != null) {
+            if (DebugMode) {
+                debugText(roomData);
+            } else {
+                DebugInfo.text = "";
+            }
+        } else {
+            Debug.LogWarning("DebugInfo TMP_Text is not assigned!");
+        }
+
         if (!DebugMode) return;
+
+        if ((Input.GetAxisRaw("Mouse ScrollWheel") > 0 || Input.GetKeyDown(KeyCode.Plus) || Input.GetKeyDown(KeyCode.KeypadPlus)) && MainCamera.orthographicSize > 1) {
+            Debug.Log("Default cam val: " + MainCamera.orthographicSize);
+            MainCamera.orthographicSize--;
+        } else if ((Input.GetAxisRaw("Mouse ScrollWheel") < 0 || Input.GetKeyDown(KeyCode.Minus) || Input.GetKeyDown(KeyCode.KeypadMinus)) && MainCamera.orthographicSize < 100) {
+            MainCamera.orthographicSize++; 
+        }
+        if (Input.GetMouseButtonDown(2) || Input.GetKeyDown(KeyCode.KeypadPeriod)) {
+            MainCamera.orthographicSize = 5;
+        }
 
         // Game State Debugging
         if (Input.GetKeyDown(KeyCode.Q)) {
@@ -1126,13 +1333,12 @@ public class GameManager : MonoBehaviour {
             superShrinkPaddle();
             Debug.Log("Paddle super shrunk");
         }
-
+         
         if (Input.GetKeyDown(KeyCode.V)) {
             // Spawn random power-up at paddle position
-            GameObject paddle = GameObject.Find("Paddle");
-            if (paddle != null) {
+            if (Paddle != null) {
                 float randomOdds = UnityEngine.Random.Range(0f, 1f);
-                PowerUpSpawn(randomOdds, new Vector3(paddle.transform.position.x, paddle.transform.position.y + 5f, 0f));
+                PowerUpSpawn(randomOdds, new Vector3(Paddle.transform.position.x, Paddle.transform.position.y + 5f, 0f));
                 Debug.Log("Spawned random power-up above paddle");
             }
         }
@@ -1217,7 +1423,6 @@ public class GameManager : MonoBehaviour {
         if (Input.GetKeyDown(KeyCode.J) && currentBoardRow < levelLayers.GetLength(0) - 1) {
             int nextRow = currentBoardRow + 1;
             if (levelLayers != null && nextRow < levelLayers.GetLength(0) && levelLayers[nextRow, currentBoardColumn] != null && ActiveBalls.Count > 0) {
-                PaddleMove paddleMove = GameObject.Find("Paddle").GetComponent<PaddleMove>();
                 foreach (GameObject ball in ActiveBalls) {
                     ball.transform.position = levelLayers[currentBoardRow + 1, currentBoardColumn].transform.position;
                 }
@@ -1230,7 +1435,6 @@ public class GameManager : MonoBehaviour {
         if (Input.GetKeyDown(KeyCode.K) && currentBoardRow > 0) {
             int prevRow = currentBoardRow - 1;
             if (levelLayers != null && prevRow >= 0 && levelLayers[prevRow, currentBoardColumn] != null && ActiveBalls.Count > 0) {
-                PaddleMove paddleMove = GameObject.Find("Paddle").GetComponent<PaddleMove>();
                 foreach (GameObject ball in ActiveBalls) {
                     ball.transform.position = levelLayers[currentBoardRow - 1, currentBoardColumn].transform.position;
                 }
@@ -1252,11 +1456,7 @@ public class GameManager : MonoBehaviour {
         if (Input.GetKeyDown(KeyCode.Alpha8)) SpawnPowerUpByIndex(7);
         if (Input.GetKeyDown(KeyCode.Alpha9)) SpawnPowerUpByIndex(8);
         if (Input.GetKeyDown(KeyCode.Alpha0)) SpawnPowerUpByIndex(9);
-        if (DebugInfo != null && roomData != null) {
-            debugText(roomData);
-        } else {
-            Debug.LogWarning("DebugInfo TMP_Text is not assigned!");
-        }
+        
     }
 
     public void debugText(LocalRoomData roomData) {
@@ -1361,9 +1561,8 @@ public class GameManager : MonoBehaviour {
             Debug.LogWarning($"Cannot spawn power-up at index {index}");
             return;
         }
-        GameObject paddle = GameObject.Find("Paddle");
-        Instantiate(powerUps[index].prefab, new Vector3(paddle.transform.position.x, paddle.transform.position.y + 5f), Quaternion.identity);
-        Debug.Log($"Spawned {powerUps[index].itemName} at position {new Vector3(paddle.transform.position.x, paddle.transform.position.y + 5f)}");
+        Instantiate(powerUps[index].prefab, new Vector3(Paddle.transform.position.x, Paddle.transform.position.y + 5f), Quaternion.identity);
+        Debug.Log($"Spawned {powerUps[index].itemName} at position {new Vector3(Paddle.transform.position.x, Paddle.transform.position.y + 5f)}");
     }
 
     public void SetDebugOutline(float thickness, Color color) {

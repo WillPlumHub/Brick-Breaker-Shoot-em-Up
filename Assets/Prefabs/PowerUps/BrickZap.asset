@@ -14,5 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   itemName: Zap Bricks
   overlaySprite: {fileID: 0}
-  prefab: {fileID: 5877641010365312783, guid: c7ff2bf76eb22424ead66c9a8039a730, type: 3}
-  dropRate: 4
+  prefab: {fileID: 4747788610326373369, guid: 537e8b6b1c2a28f40adac85d58a02344, type: 3}
+  dropRate: 2
+  script: {fileID: 11500000, guid: 6b7a813eff309f94099e507781718781, type: 3}

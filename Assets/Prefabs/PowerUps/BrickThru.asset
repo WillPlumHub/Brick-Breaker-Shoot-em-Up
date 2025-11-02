@@ -14,5 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   itemName: Brick Thru
   overlaySprite: {fileID: 0}
-  prefab: {fileID: 6309965712444701244, guid: 661d00fc01e0e5c408758d5285b922dd, type: 3}
+  prefab: {fileID: 4747788610326373369, guid: 537e8b6b1c2a28f40adac85d58a02344, type: 3}
   dropRate: 2
+  script: {fileID: 11500000, guid: 4a96aa1cd17ab4444a0c152e5c952559, type: 3}

@@ -14,5 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   itemName: Eight Balls
   overlaySprite: {fileID: 0}
-  prefab: {fileID: 8870823433124181673, guid: 79b4cacb1a257d044a16401e095fefd0, type: 3}
-  dropRate: 2
+  prefab: {fileID: 4747788610326373369, guid: 537e8b6b1c2a28f40adac85d58a02344, type: 3}
+  dropRate: 102
+  script: {fileID: 11500000, guid: ad07ee56d32dd4a4488fd103bc5a2667, type: 3}

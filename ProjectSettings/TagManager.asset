@@ -14,11 +14,12 @@ TagManager:
   - invisibleBrick
   - BlockList
   - PowerUp
+  - Enemy
   layers:
   - Default
   - TransparentFX
   - Ignore Raycast
-  - 
+  - MiniPaddle
   - Water
   - UI
   - 

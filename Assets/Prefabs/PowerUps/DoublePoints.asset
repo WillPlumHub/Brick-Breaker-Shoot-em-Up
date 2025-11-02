@@ -14,5 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   itemName: Double Points
   overlaySprite: {fileID: 0}
-  prefab: {fileID: 2589749747280809442, guid: eb3954d0628f6ca4aabc124dc7017a82, type: 3}
+  prefab: {fileID: 4747788610326373369, guid: 537e8b6b1c2a28f40adac85d58a02344, type: 3}
   dropRate: 2
+  script: {fileID: 11500000, guid: 237a021ca766a9e41a412cc138616987, type: 3}

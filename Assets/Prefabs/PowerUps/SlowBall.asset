@@ -14,5 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   itemName: SlowBall
   overlaySprite: {fileID: 0}
-  prefab: {fileID: 6047447071806274595, guid: a5ce6f310af3c0344ab6d3c9adfa4af3, type: 3}
+  prefab: {fileID: 4747788610326373369, guid: 537e8b6b1c2a28f40adac85d58a02344, type: 3}
   dropRate: 4
+  script: {fileID: 11500000, guid: 1a5818f4c1cee674cba505023b476240, type: 3}

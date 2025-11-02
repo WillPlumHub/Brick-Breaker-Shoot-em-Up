@@ -14,5 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   itemName: Shrink Paddle
   overlaySprite: {fileID: 0}
-  prefab: {fileID: 98199201936810809, guid: 254e781a8e9968c409279d60601266b2, type: 3}
+  prefab: {fileID: 4747788610326373369, guid: 537e8b6b1c2a28f40adac85d58a02344, type: 3}
   dropRate: 4
+  script: {fileID: 11500000, guid: 76b1455a8992c6444b05e6365939f394, type: 3}
